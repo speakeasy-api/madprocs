@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>madprocs</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/ansi_up@5.2.1/ansi_up.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>madprocs</h1>
+            <span class="status" id="connection-status">Connecting...</span>
+        </header>
+
+        <div class="main">
+            <aside class="sidebar">
+                <h2>Processes</h2>
+                <ul id="process-list"></ul>
+            </aside>
+
+            <main class="content">
+                <div class="log-header">
+                    <h2 id="log-title">Select a process</h2>
+                    <div class="controls">
+                        <input type="text" id="search-input" placeholder="Search logs..." />
+                        <button id="btn-start" disabled>Start</button>
+                        <button id="btn-stop" disabled>Stop</button>
+                        <button id="btn-restart" disabled>Restart</button>
+                        <button id="btn-clear">Clear</button>
+                        <button id="btn-download">Download</button>
+                    </div>
+                </div>
+                <div class="log-viewer" id="log-viewer">
+                    <div class="log-content" id="log-content"></div>
+                </div>
+                <div class="log-footer">
+                    <span id="log-stats">0 lines</span>
+                    <span id="search-stats"></span>
+                </div>
+            </main>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
