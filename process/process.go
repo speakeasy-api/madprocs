@@ -13,9 +13,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/creack/pty"
 	"github.com/speakeasy-api/madprocs/config"
 	"github.com/speakeasy-api/madprocs/log"
-	"github.com/creack/pty"
 )
 
 // Regex to match cursor movement and screen control ANSI sequences
@@ -229,32 +229,41 @@ func (p *Process) streamPtyOutput(ptmx *os.File) {
 }
 
 func (p *Process) wait() {
-	if p.cmd == nil {
+	p.mu.RLock()
+	cmd := p.cmd
+	p.mu.RUnlock()
+
+	if cmd == nil {
 		return
 	}
 
-	err := p.cmd.Wait()
+	err := cmd.Wait()
 
 	p.mu.Lock()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			p.exitCode = exitErr.ExitCode()
+	// Only update state if this is still the current command
+	// (avoids race condition when process is restarted)
+	if p.cmd == cmd {
+		if err != nil {
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				p.exitCode = exitErr.ExitCode()
+			} else {
+				p.exitCode = -1
+			}
 		} else {
-			p.exitCode = -1
+			p.exitCode = 0
 		}
-	} else {
-		p.exitCode = 0
+		p.state = StateExited
 	}
-	p.state = StateExited
 	p.mu.Unlock()
 
-	// Handle autorestart
-	if p.Config.Autorestart {
-		// Don't restart if exited too quickly (within 1 second)
-		if time.Since(p.startTime) > time.Second {
-			time.Sleep(100 * time.Millisecond)
-			p.Start()
-		}
+	// Handle autorestart (only if this was the current command)
+	p.mu.RLock()
+	shouldRestart := p.Config.Autorestart && p.cmd == cmd && time.Since(p.startTime) > time.Second
+	p.mu.RUnlock()
+
+	if shouldRestart {
+		time.Sleep(100 * time.Millisecond)
+		p.Start()
 	}
 }
 
@@ -300,21 +309,24 @@ func (p *Process) Stop() error {
 	}
 
 	// Close PTY after a short delay to allow graceful shutdown
+	// Capture the ptyFile reference so we close the OLD pty, not a new one
+	ptyToClose := p.ptyFile
 	go func() {
 		time.Sleep(500 * time.Millisecond)
-		p.mu.RLock()
-		if p.ptyFile != nil {
-			p.ptyFile.Close()
+		if ptyToClose != nil {
+			ptyToClose.Close()
 		}
-		p.mu.RUnlock()
 	}()
 
 	// Force kill after timeout if still running
+	// Capture the cmd reference so we kill the OLD process, not a new one
+	cmdToKill := p.cmd
 	go func() {
 		time.Sleep(5 * time.Second)
 		p.mu.RLock()
-		if p.state == StateRunning && p.cmd != nil && p.cmd.Process != nil {
-			p.cmd.Process.Kill()
+		// Only kill if this is still the same command
+		if p.cmd == cmdToKill && p.state == StateRunning && cmdToKill != nil && cmdToKill.Process != nil {
+			cmdToKill.Process.Kill()
 		}
 		p.mu.RUnlock()
 	}()
