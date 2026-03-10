@@ -4,6 +4,8 @@ let logs = [];
 let ws = null;
 let searchQuery = '';
 let autoScroll = true;
+let intentionalClose = false;
+let reconnectTimeout = null;
 
 // ANSI to HTML converter
 const ansiUp = new AnsiUp();
@@ -109,8 +111,17 @@ async function selectProcess(name) {
 
 // Connect WebSocket
 function connectWebSocket() {
+    // Clear any pending reconnect
+    if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = null;
+    }
+
+    // Close existing connection
     if (ws) {
+        intentionalClose = true;
         ws.close();
+        ws = null;
     }
 
     const process = selectedProcess || 'all';
@@ -120,14 +131,18 @@ function connectWebSocket() {
     ws.onopen = () => {
         connectionStatus.textContent = 'Connected';
         connectionStatus.className = 'status connected';
+        intentionalClose = false;
     };
 
     ws.onclose = () => {
         connectionStatus.textContent = 'Disconnected';
         connectionStatus.className = 'status disconnected';
 
-        // Reconnect after delay
-        setTimeout(connectWebSocket, 3000);
+        // Only reconnect if this wasn't an intentional close
+        if (!intentionalClose) {
+            reconnectTimeout = setTimeout(connectWebSocket, 3000);
+        }
+        intentionalClose = false;
     };
 
     ws.onmessage = (event) => {
