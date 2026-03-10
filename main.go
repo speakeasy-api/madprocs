@@ -118,7 +118,7 @@ func main() {
 		select {}
 	} else {
 		// TUI mode
-		model := ui.NewModel(manager, actualPort)
+		model := ui.NewModel(manager, actualPort, webServer.Host(), webServer.IsTLS())
 		p := tea.NewProgram(model,
 			tea.WithAltScreen(),
 			tea.WithMouseCellMotion(),

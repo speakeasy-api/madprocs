@@ -62,6 +62,8 @@ type Match struct {
 type Model struct {
 	manager        *process.Manager
 	webPort        int
+	webHost        string
+	webTLS         bool
 	width          int
 	height         int
 	focus          Focus
@@ -80,7 +82,7 @@ type Model struct {
 }
 
 // NewModel creates a new UI model
-func NewModel(manager *process.Manager, webPort int) Model {
+func NewModel(manager *process.Manager, webPort int, webHost string, webTLS bool) Model {
 	vp := viewport.New(0, 0)
 	vp.MouseWheelEnabled = true
 	vp.MouseWheelDelta = 3
@@ -88,6 +90,8 @@ func NewModel(manager *process.Manager, webPort int) Model {
 	return Model{
 		manager:  manager,
 		webPort:  webPort,
+		webHost:  webHost,
+		webTLS:   webTLS,
 		viewport: vp,
 		logLines: []string{},
 	}
@@ -673,7 +677,15 @@ func (m *Model) scrollToMatch() {
 }
 
 func (m *Model) openWebUI() {
-	url := fmt.Sprintf("http://localhost:%d", m.webPort)
+	protocol := "http"
+	if m.webTLS {
+		protocol = "https"
+	}
+	host := m.webHost
+	if host == "" {
+		host = "localhost"
+	}
+	url := fmt.Sprintf("%s://%s:%d", protocol, host, m.webPort)
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
