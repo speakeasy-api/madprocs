@@ -426,6 +426,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Clear search state since logs are cleared
 					m.matches = nil
 					m.matchIndex = 0
+					m.updateLogContent()
 				}
 			}
 		}
