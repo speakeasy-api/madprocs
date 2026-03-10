@@ -2,8 +2,8 @@ package web
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
-	"strings"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -92,27 +92,18 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		processName = "all"
 	}
 
-	// Create upgrader with origin check based on allowed hosts
+	// Create upgrader - always allow all origins since we're a local dev tool
+	// The allowed hosts middleware already handles security for HTTP requests
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
-			if len(s.config.AllowedHosts) == 0 {
-				return true // Allow all if no hosts configured
-			}
-			origin := r.Header.Get("Origin")
-			if origin == "" {
-				return true // Allow no-origin requests (same-origin)
-			}
-			for _, h := range s.config.AllowedHosts {
-				if strings.Contains(origin, strings.TrimSpace(h)) {
-					return true
-				}
-			}
-			return false
+			return true
 		},
 	}
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
+		// Log upgrade errors for debugging
+		fmt.Printf("WebSocket upgrade error: %v\n", err)
 		return
 	}
 
