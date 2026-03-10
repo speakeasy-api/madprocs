@@ -29,16 +29,18 @@ const logViewer = document.getElementById('log-viewer');
 // Initialize
 async function init() {
     const processes = await fetchProcesses();
+
+    // Connect once to receive all logs - filtering happens client-side
     connectWebSocket();
     setupEventListeners();
 
-    // Select first process by default
+    // Select first process by default (this does NOT reconnect WebSocket)
     if (processes.length > 0) {
         selectProcess(processes[0].name);
     }
 
     // Refresh process list periodically
-    setInterval(fetchProcesses, 2000);
+    setInterval(fetchProcesses, 5000);
 }
 
 // Fetch processes from API
@@ -105,8 +107,8 @@ async function selectProcess(name) {
         console.error('Failed to fetch logs:', err);
     }
 
-    // Reconnect WebSocket for this process
-    connectWebSocket();
+    // Note: We don't reconnect WebSocket here - we use a single connection
+    // to "all" logs and filter client-side based on selectedProcess
 }
 
 // Connect WebSocket
