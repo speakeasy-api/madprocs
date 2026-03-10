@@ -14,7 +14,7 @@ A drop-in replacement for [mprocs](https://github.com/pvolok/mprocs) with search
 - **PTY support** - Full terminal emulation for processes
 - **Web UI** - Browser-based log viewer (press `w` to open)
 - **Auto-scroll** - Follows new output, pauses when you scroll up
-- **Mouse support** - Click to select processes, scroll logs
+- **Copyable logs** - Select text and click URLs in your terminal
 
 ## Installation
 
