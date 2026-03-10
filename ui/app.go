@@ -822,6 +822,7 @@ func (m Model) renderStatusBar() string {
 		statusKeyStyle.Render("?") + ":regex",
 		statusKeyStyle.Render("z") + ":zoom",
 		statusKeyStyle.Render("w") + ":web",
+		statusKeyStyle.Render("⇧") + ":select",
 	}
 	right := strings.Join(help, " ")
 
