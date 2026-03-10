@@ -28,7 +28,7 @@ func main() {
 	flag.StringVar(&configPath, "config", "", "Path to config file (default: mprocs.yaml)")
 	flag.StringVar(&configPath, "c", "", "Path to config file (shorthand)")
 	flag.BoolVar(&webOnly, "web-only", false, "Run in headless mode with web UI only")
-	flag.IntVar(&webPort, "port", 0, "Web server port (default: 3000)")
+	flag.IntVar(&webPort, "port", 0, "Web server port (default: random available port)")
 	flag.BoolVar(&showVersion, "version", false, "Show version")
 	flag.BoolVar(&showVersion, "v", false, "Show version (shorthand)")
 	flag.Parse()

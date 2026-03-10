@@ -87,7 +87,7 @@ func Load(path string) (*Config, error) {
 	cfg := &Config{
 		Scrollback:    1000,
 		ProcListWidth: 20,
-		WebPort:       3000,
+		WebPort:       0,
 	}
 
 	if err := yaml.Unmarshal(data, cfg); err != nil {
@@ -168,6 +168,6 @@ func LoadOrDefault(path string) (*Config, error) {
 		Procs:         make(map[string]ProcConfig),
 		Scrollback:    1000,
 		ProcListWidth: 20,
-		WebPort:       3000,
+		WebPort:       0,
 	}, nil
 }
