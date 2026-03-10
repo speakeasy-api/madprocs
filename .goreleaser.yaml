@@ -29,14 +29,6 @@ archives:
       - goos: windows
         format: zip
 
-brews:
-  - repository:
-      owner: speakeasy-api
-      name: homebrew-tap
-    homepage: https://github.com/speakeasy-api/madprocs
-    description: A drop-in replacement for mprocs with searchable logs
-    license: MIT
-
 changelog:
   sort: asc
   filters:

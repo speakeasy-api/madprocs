@@ -2,6 +2,8 @@
 
 A drop-in replacement for [mprocs](https://github.com/pvolok/mprocs) with searchable logs.
 
+![madprocs screenshot](screenshot.png)
+
 ## Features
 
 - **mprocs-compatible** - Uses the same `mprocs.yaml` config format
