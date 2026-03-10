@@ -89,6 +89,7 @@ func main() {
 		model := ui.NewModel(manager, actualPort)
 		p := tea.NewProgram(model,
 			tea.WithAltScreen(),
+			tea.WithMouseCellMotion(),
 			tea.WithInputTTY(),
 		)
 
