@@ -5,6 +5,7 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"net"
 	"net/http"
 	"time"
 
@@ -49,8 +50,16 @@ func (s *Server) Start() error {
 	}
 	mux.Handle("/", http.FileServer(http.FS(staticFS)))
 
+	// Get a listener on the specified port (0 = random available port)
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", s.port))
+	if err != nil {
+		return err
+	}
+
+	// Update port to the actual port assigned
+	s.port = listener.Addr().(*net.TCPAddr).Port
+
 	s.server = &http.Server{
-		Addr:    fmt.Sprintf(":%d", s.port),
 		Handler: mux,
 	}
 
@@ -61,7 +70,7 @@ func (s *Server) Start() error {
 	go s.subscribeToAllLogs()
 
 	go func() {
-		if err := s.server.ListenAndServe(); err != http.ErrServerClosed {
+		if err := s.server.Serve(listener); err != http.ErrServerClosed {
 			fmt.Printf("Web server error: %v\n", err)
 		}
 	}()

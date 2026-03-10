@@ -70,20 +70,23 @@ func main() {
 	}
 	defer webServer.Stop()
 
+	// Get the actual port (may be different if random port was used)
+	actualPort := webServer.Port()
+
 	// Start all autostart processes
 	manager.StartAll()
 
 	if webOnly {
 		// Headless mode - just run web server
 		fmt.Printf("madprocs running in headless mode\n")
-		fmt.Printf("Web UI: http://localhost:%d\n", cfg.WebPort)
+		fmt.Printf("Web UI: http://localhost:%d\n", actualPort)
 		fmt.Printf("Press Ctrl+C to stop\n")
 
 		// Wait for interrupt
 		select {}
 	} else {
 		// TUI mode
-		model := ui.NewModel(manager, cfg.WebPort)
+		model := ui.NewModel(manager, actualPort)
 		p := tea.NewProgram(model,
 			tea.WithAltScreen(),
 			tea.WithMouseCellMotion(),
