@@ -27,6 +27,7 @@ func main() {
 		tlsCert      string
 		tlsKey       string
 		allowedHosts string
+		logDir       string
 		showVersion  bool
 	)
 
@@ -38,6 +39,7 @@ func main() {
 	flag.StringVar(&tlsCert, "tls-cert", "", "Path to TLS certificate file")
 	flag.StringVar(&tlsKey, "tls-key", "", "Path to TLS key file")
 	flag.StringVar(&allowedHosts, "allowed-hosts", "", "Comma-separated list of allowed hosts for CORS")
+	flag.StringVar(&logDir, "log-dir", "", "Directory to write process log files")
 	flag.BoolVar(&showVersion, "version", false, "Show version")
 	flag.BoolVar(&showVersion, "v", false, "Show version (shorthand)")
 	flag.Parse()
@@ -74,6 +76,9 @@ func main() {
 	}
 	if allowedHosts != "" {
 		cfg.AllowedHosts = strings.Split(allowedHosts, ",")
+	}
+	if logDir != "" {
+		cfg.LogDir = logDir
 	}
 
 	// Create process manager
