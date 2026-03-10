@@ -99,14 +99,22 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 
-	// Resolve <CONFIG_DIR> in paths and parse stop config
+	// Resolve <CONFIG_DIR> and environment variables in paths
 	configDir := filepath.Dir(path)
 	for name, proc := range cfg.Procs {
-		if strings.HasPrefix(proc.Cwd, "<CONFIG_DIR>") {
-			proc.Cwd = strings.Replace(proc.Cwd, "<CONFIG_DIR>", configDir, 1)
+		// Expand <CONFIG_DIR> first, then env vars
+		proc.Cwd = expandConfigVars(proc.Cwd, configDir)
+		proc.LogDir = expandConfigVars(proc.LogDir, configDir)
+		proc.Shell = os.ExpandEnv(proc.Shell)
+
+		// Expand env vars in cmd args
+		for i, arg := range proc.Cmd {
+			proc.Cmd[i] = os.ExpandEnv(arg)
 		}
-		if strings.HasPrefix(proc.LogDir, "<CONFIG_DIR>") {
-			proc.LogDir = strings.Replace(proc.LogDir, "<CONFIG_DIR>", configDir, 1)
+
+		// Expand env vars in add_path
+		for i, p := range proc.AddPath {
+			proc.AddPath[i] = expandConfigVars(p, configDir)
 		}
 
 		// Parse stop config
@@ -114,11 +122,22 @@ func Load(path string) (*Config, error) {
 		cfg.Procs[name] = proc
 	}
 
-	if strings.HasPrefix(cfg.LogDir, "<CONFIG_DIR>") {
-		cfg.LogDir = strings.Replace(cfg.LogDir, "<CONFIG_DIR>", configDir, 1)
-	}
+	cfg.LogDir = expandConfigVars(cfg.LogDir, configDir)
+	cfg.TLSCert = expandConfigVars(cfg.TLSCert, configDir)
+	cfg.TLSKey = expandConfigVars(cfg.TLSKey, configDir)
 
 	return cfg, nil
+}
+
+// expandConfigVars expands <CONFIG_DIR> and environment variables in a string
+func expandConfigVars(s string, configDir string) string {
+	if s == "" {
+		return s
+	}
+	// Expand <CONFIG_DIR> first
+	s = strings.Replace(s, "<CONFIG_DIR>", configDir, -1)
+	// Then expand environment variables ($VAR or ${VAR})
+	return os.ExpandEnv(s)
 }
 
 // parseStopConfig parses the stop configuration which can be:
