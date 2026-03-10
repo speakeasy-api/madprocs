@@ -3,7 +3,6 @@ package web
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/speakeasy-api/madprocs/process"
@@ -27,11 +26,6 @@ type LogMessage struct {
 
 // handleProcesses returns a list of all processes
 func (s *Server) handleProcesses(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
 	procs := s.manager.List()
 	infos := make([]ProcessInfo, len(procs))
 
@@ -58,13 +52,8 @@ func (s *Server) handleProcesses(w http.ResponseWriter, r *http.Request) {
 
 // handleLogs returns log history for a process
 func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Extract process name from path: /api/logs/{name}
-	name := strings.TrimPrefix(r.URL.Path, "/api/logs/")
+	// Get process name from path parameter (Go 1.22+)
+	name := r.PathValue("name")
 	if name == "" {
 		http.Error(w, "Process name required", http.StatusBadRequest)
 		return
@@ -94,21 +83,14 @@ func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 
 // handleProcessAction handles start/stop/restart actions
 func (s *Server) handleProcessAction(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
+	// Get path parameters (Go 1.22+)
+	name := r.PathValue("name")
+	action := r.PathValue("action")
 
-	// Extract path: /api/process/{name}/{action}
-	path := strings.TrimPrefix(r.URL.Path, "/api/process/")
-	parts := strings.Split(path, "/")
-	if len(parts) != 2 {
+	if name == "" || action == "" {
 		http.Error(w, "Invalid path", http.StatusBadRequest)
 		return
 	}
-
-	name := parts[0]
-	action := parts[1]
 
 	proc := s.manager.Get(name)
 	if proc == nil {

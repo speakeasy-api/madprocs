@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -19,16 +20,24 @@ var (
 
 func main() {
 	var (
-		configPath  string
-		webOnly     bool
-		webPort     int
-		showVersion bool
+		configPath   string
+		webOnly      bool
+		webPort      int
+		webHost      string
+		tlsCert      string
+		tlsKey       string
+		allowedHosts string
+		showVersion  bool
 	)
 
 	flag.StringVar(&configPath, "config", "", "Path to config file (default: mprocs.yaml)")
 	flag.StringVar(&configPath, "c", "", "Path to config file (shorthand)")
 	flag.BoolVar(&webOnly, "web-only", false, "Run in headless mode with web UI only")
 	flag.IntVar(&webPort, "port", 0, "Web server port (default: random available port)")
+	flag.StringVar(&webHost, "host", "", "Web server host (default: localhost)")
+	flag.StringVar(&tlsCert, "tls-cert", "", "Path to TLS certificate file")
+	flag.StringVar(&tlsKey, "tls-key", "", "Path to TLS key file")
+	flag.StringVar(&allowedHosts, "allowed-hosts", "", "Comma-separated list of allowed hosts for CORS")
 	flag.BoolVar(&showVersion, "version", false, "Show version")
 	flag.BoolVar(&showVersion, "v", false, "Show version (shorthand)")
 	flag.Parse()
@@ -50,9 +59,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Override web port if specified
+	// Override web settings if specified via CLI
 	if webPort > 0 {
 		cfg.WebPort = webPort
+	}
+	if webHost != "" {
+		cfg.WebHost = webHost
+	}
+	if tlsCert != "" {
+		cfg.TLSCert = tlsCert
+	}
+	if tlsKey != "" {
+		cfg.TLSKey = tlsKey
+	}
+	if allowedHosts != "" {
+		cfg.AllowedHosts = strings.Split(allowedHosts, ",")
 	}
 
 	// Create process manager
@@ -63,7 +84,14 @@ func main() {
 	}
 
 	// Start web server
-	webServer := web.NewServer(manager, cfg.WebPort)
+	webCfg := web.Config{
+		Host:         cfg.WebHost,
+		Port:         cfg.WebPort,
+		TLSCert:      cfg.TLSCert,
+		TLSKey:       cfg.TLSKey,
+		AllowedHosts: cfg.AllowedHosts,
+	}
+	webServer := web.NewServer(manager, webCfg)
 	if err := webServer.Start(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error starting web server: %v\n", err)
 		os.Exit(1)
@@ -78,8 +106,12 @@ func main() {
 
 	if webOnly {
 		// Headless mode - just run web server
+		protocol := "http"
+		if cfg.TLSCert != "" && cfg.TLSKey != "" {
+			protocol = "https"
+		}
 		fmt.Printf("madprocs running in headless mode\n")
-		fmt.Printf("Web UI: http://localhost:%d\n", actualPort)
+		fmt.Printf("Web UI: %s://%s:%d\n", protocol, cfg.WebHost, actualPort)
 		fmt.Printf("Press Ctrl+C to stop\n")
 
 		// Wait for interrupt

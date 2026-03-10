@@ -17,6 +17,10 @@ type Config struct {
 	ProcListWidth    int                   `yaml:"proc_list_width"`
 	LogDir           string                `yaml:"log_dir"`
 	WebPort          int                   `yaml:"web_port"`
+	WebHost          string                `yaml:"web_host"`
+	TLSCert          string                `yaml:"tls_cert"`
+	TLSKey           string                `yaml:"tls_key"`
+	AllowedHosts     []string              `yaml:"allowed_hosts"`
 }
 
 // StopConfig represents how to stop a process
@@ -88,6 +92,7 @@ func Load(path string) (*Config, error) {
 		Scrollback:    1000,
 		ProcListWidth: 20,
 		WebPort:       0,
+		WebHost:       "localhost",
 	}
 
 	if err := yaml.Unmarshal(data, cfg); err != nil {
@@ -169,5 +174,6 @@ func LoadOrDefault(path string) (*Config, error) {
 		Scrollback:    1000,
 		ProcListWidth: 20,
 		WebPort:       0,
+		WebHost:       "localhost",
 	}, nil
 }

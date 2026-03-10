@@ -9,12 +9,6 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins for development
-	},
-}
-
 // Client represents a WebSocket client
 type Client struct {
 	hub     *Hub
@@ -92,10 +86,29 @@ func (h *Hub) Broadcast(process string, msg LogMessage) {
 
 // handleWebSocket handles WebSocket connections
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
-	// Extract process name from path: /ws/logs/{name}
-	processName := strings.TrimPrefix(r.URL.Path, "/ws/logs/")
+	// Get process name from path parameter (Go 1.22+)
+	processName := r.PathValue("process")
 	if processName == "" {
 		processName = "all"
+	}
+
+	// Create upgrader with origin check based on allowed hosts
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			if len(s.config.AllowedHosts) == 0 {
+				return true // Allow all if no hosts configured
+			}
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				return true // Allow no-origin requests (same-origin)
+			}
+			for _, h := range s.config.AllowedHosts {
+				if strings.Contains(origin, strings.TrimSpace(h)) {
+					return true
+				}
+			}
+			return false
+		},
 	}
 
 	conn, err := upgrader.Upgrade(w, r, nil)
