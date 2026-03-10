@@ -12,7 +12,7 @@ A drop-in replacement for [mprocs](https://github.com/pvolok/mprocs) with search
   - Regex search (`?`)
   - Fuzzy search (`Ctrl+F`)
 - **PTY support** - Full terminal emulation for processes
-- **Web UI** - Browser-based log viewer at `http://localhost:3000`
+- **Web UI** - Browser-based log viewer (press `w` to open)
 - **Auto-scroll** - Follows new output, pauses when you scroll up
 - **Mouse support** - Click to select processes, scroll logs
 
@@ -81,7 +81,7 @@ procs:
 
 ## Web UI
 
-Access the web UI at `http://localhost:3000` (or your configured port) for:
+Press `w` to open the web UI in your browser, or access it at the URL shown in the status bar:
 - Full log history with ANSI color support
 - Search and filtering
 - Process control (start/stop/restart)
