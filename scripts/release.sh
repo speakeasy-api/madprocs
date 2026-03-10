@@ -34,13 +34,21 @@ esac
 NEW_TAG="v${MAJOR}.${MINOR}.${PATCH}"
 echo "New tag: $NEW_TAG"
 
-# Confirm
-read -p "Create and push tag $NEW_TAG? [y/N] " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-  echo "Aborted"
-  exit 1
+# Check if -y flag was passed to skip confirmation
+if [[ "$2" != "-y" ]]; then
+  read -p "Create and push tag $NEW_TAG? [y/N] " -n 1 -r
+  echo
+  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Aborted"
+    exit 1
+  fi
 fi
+
+# Clean up any existing release/tag with this version
+echo "Cleaning up any existing release/tag..."
+gh release delete "$NEW_TAG" --yes 2>/dev/null || true
+git push origin ":refs/tags/$NEW_TAG" 2>/dev/null || true
+git tag -d "$NEW_TAG" 2>/dev/null || true
 
 # Create and push tag
 git tag "$NEW_TAG"
@@ -51,6 +59,7 @@ echo "Tag $NEW_TAG pushed. Waiting for release to build..."
 # Wait for release
 for i in {1..60}; do
   if gh release view "$NEW_TAG" &>/dev/null; then
+    echo ""
     echo "Release $NEW_TAG is ready!"
     gh release view "$NEW_TAG"
     exit 0
@@ -59,5 +68,6 @@ for i in {1..60}; do
   sleep 5
 done
 
+echo ""
 echo "Timeout waiting for release. Check GitHub Actions."
 exit 1
