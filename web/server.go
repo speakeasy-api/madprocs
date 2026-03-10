@@ -5,7 +5,9 @@ import (
 	"crypto/tls"
 	"embed"
 	"fmt"
+	"io"
 	"io/fs"
+	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -85,7 +87,8 @@ func (s *Server) Start() error {
 	s.port = listener.Addr().(*net.TCPAddr).Port
 
 	s.server = &http.Server{
-		Handler: handler,
+		Handler:  handler,
+		ErrorLog: log.New(io.Discard, "", 0), // Suppress TLS handshake errors
 	}
 
 	// Start WebSocket hub
