@@ -421,7 +421,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			case key.Matches(msg, keys.Restart):
 				if m.selected < len(procs) {
+					procs[m.selected].Buffer.Clear()
 					procs[m.selected].Restart()
+					// Clear search state since logs are cleared
+					m.matches = nil
+					m.matchIndex = 0
 				}
 			}
 		}
