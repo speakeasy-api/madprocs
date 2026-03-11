@@ -281,6 +281,26 @@ func getBaseURL() (string, error) {
 	return strings.TrimSpace(string(data)), nil
 }
 
+// httpGetWithRetry performs an HTTP GET with automatic retry on connection failure
+func httpGetWithRetry(url string) (*http.Response, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		// Retry once on connection error (handles sandbox warmup)
+		resp, err = http.Get(url)
+	}
+	return resp, err
+}
+
+// httpPostWithRetry performs an HTTP POST with automatic retry on connection failure
+func httpPostWithRetry(url string) (*http.Response, error) {
+	resp, err := http.Post(url, "", nil)
+	if err != nil {
+		// Retry once on connection error (handles sandbox warmup)
+		resp, err = http.Post(url, "", nil)
+	}
+	return resp, err
+}
+
 func handleStatusCommand() {
 	baseURL, err := getBaseURL()
 	if err != nil {
@@ -288,7 +308,7 @@ func handleStatusCommand() {
 		os.Exit(1)
 	}
 
-	resp, err := http.Get(baseURL + "/api/processes")
+	resp, err := httpGetWithRetry(baseURL + "/api/processes")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error connecting to madprocs: %v\n", err)
 		os.Exit(1)
@@ -335,7 +355,7 @@ func handleLogsCommand(args []string) {
 	}
 
 	processName := args[0]
-	resp, err := http.Get(baseURL + "/api/logs/" + processName)
+	resp, err := httpGetWithRetry(baseURL + "/api/logs/" + processName)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error connecting to madprocs: %v\n", err)
 		os.Exit(1)
@@ -375,7 +395,7 @@ func handleProcessCommand(action string, args []string) {
 	}
 
 	processName := args[0]
-	resp, err := http.Post(baseURL+"/api/process/"+processName+"/"+action, "", nil)
+	resp, err := httpPostWithRetry(baseURL + "/api/process/" + processName + "/" + action)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error connecting to madprocs: %v\n", err)
 		os.Exit(1)
