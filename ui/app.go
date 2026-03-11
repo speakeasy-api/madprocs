@@ -245,9 +245,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.MouseButtonLeft:
 			if msg.Action == tea.MouseActionPress {
 				// Check if click is in the process list area (first ~24 columns)
-				// Layout: border(1) + title(1) + empty(1) = processes start at Y=3
+				// Layout: border(1) + title(1) = processes start at Y=2
 				listWidth := 24
-				headerRows := 3 // border + title + empty line
+				headerRows := 2 // border + title
 
 				if msg.X < listWidth && msg.Y >= headerRows {
 					// Calculate which process was clicked
