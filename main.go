@@ -2,8 +2,11 @@ package main
 
 import (
 	"embed"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,6 +32,21 @@ func main() {
 		switch os.Args[1] {
 		case "skill":
 			handleSkillCommand(os.Args[2:])
+			return
+		case "status":
+			handleStatusCommand()
+			return
+		case "logs":
+			handleLogsCommand(os.Args[2:])
+			return
+		case "start":
+			handleProcessCommand("start", os.Args[2:])
+			return
+		case "stop":
+			handleProcessCommand("stop", os.Args[2:])
+			return
+		case "restart":
+			handleProcessCommand("restart", os.Args[2:])
 			return
 		}
 	}
@@ -250,4 +268,130 @@ func uninstallSkill() {
 	}
 
 	fmt.Println("Uninstalled madprocs skill.")
+}
+
+func getBaseURL() (string, error) {
+	data, err := os.ReadFile(".madprocs.port")
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("madprocs is not running (no .madprocs.port file found)")
+		}
+		return "", err
+	}
+	return strings.TrimSpace(string(data)), nil
+}
+
+func handleStatusCommand() {
+	baseURL, err := getBaseURL()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	resp, err := http.Get(baseURL + "/api/processes")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error connecting to madprocs: %v\n", err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+
+	var processes []struct {
+		Name   string `json:"name"`
+		State  string `json:"state"`
+		Uptime string `json:"uptime"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&processes); err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing response: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("madprocs running at %s\n\n", baseURL)
+	for _, p := range processes {
+		icon := "○"
+		if p.State == "running" {
+			icon = "●"
+		} else if p.State == "exited" {
+			icon = "✗"
+		}
+		uptime := ""
+		if p.Uptime != "" {
+			uptime = fmt.Sprintf(" (%s)", p.Uptime)
+		}
+		fmt.Printf("  %s %s: %s%s\n", icon, p.Name, p.State, uptime)
+	}
+}
+
+func handleLogsCommand(args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "Usage: madprocs logs <process-name>")
+		os.Exit(1)
+	}
+
+	baseURL, err := getBaseURL()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	processName := args[0]
+	resp, err := http.Get(baseURL + "/api/logs/" + processName)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error connecting to madprocs: %v\n", err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		fmt.Fprintf(os.Stderr, "Process not found: %s\n", processName)
+		os.Exit(1)
+	}
+
+	var lines []struct {
+		Content   string `json:"content"`
+		Timestamp string `json:"timestamp"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&lines); err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing response: %v\n", err)
+		os.Exit(1)
+	}
+
+	for _, line := range lines {
+		fmt.Println(line.Content)
+	}
+}
+
+func handleProcessCommand(action string, args []string) {
+	if len(args) == 0 {
+		fmt.Fprintf(os.Stderr, "Usage: madprocs %s <process-name>\n", action)
+		os.Exit(1)
+	}
+
+	baseURL, err := getBaseURL()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	processName := args[0]
+	resp, err := http.Post(baseURL+"/api/process/"+processName+"/"+action, "", nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error connecting to madprocs: %v\n", err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		fmt.Fprintf(os.Stderr, "Process not found: %s\n", processName)
+		os.Exit(1)
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", string(body))
+		os.Exit(1)
+	}
+
+	fmt.Printf("%s: %s\n", processName, action)
 }

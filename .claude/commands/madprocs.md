@@ -2,81 +2,56 @@
 
 You are helping the user control a running madprocs instance - a multi-process development harness with searchable logs.
 
-## Overview
+## CLI Commands
 
-madprocs runs multiple development processes (defined in `mprocs.yaml`) and displays their logs in a TUI. The user has madprocs running in a separate terminal window.
+Use these commands to control madprocs. They communicate with the running instance automatically.
 
-## Port Discovery
-
-**IMPORTANT**: Always check the `.madprocs.port` file first to get the correct URL:
-
+### Check status of all processes
 ```bash
-cat .madprocs.port
+madprocs status
 ```
 
-This file contains the full URL (e.g., `http://localhost:54321`). Use this URL for all API calls.
-
-If the file doesn't exist, madprocs might not be running. Ask the user to start it.
-
-## Web API
-
-First, get the base URL:
+### View logs for a process
 ```bash
-MADPROCS_URL=$(cat .madprocs.port)
-```
-
-Then use these commands:
-
-### List all processes and their status
-```bash
-curl -s "${MADPROCS_URL}/api/processes" | jq
-```
-
-### Get logs for a specific process
-```bash
-curl -s "${MADPROCS_URL}/api/logs/PROCESS_NAME" | jq
+madprocs logs <process-name>
 ```
 
 ### Start a process
 ```bash
-curl -s -X POST "${MADPROCS_URL}/api/process/PROCESS_NAME/start"
+madprocs start <process-name>
 ```
 
 ### Stop a process
 ```bash
-curl -s -X POST "${MADPROCS_URL}/api/process/PROCESS_NAME/stop"
+madprocs stop <process-name>
 ```
 
 ### Restart a process
 ```bash
-curl -s -X POST "${MADPROCS_URL}/api/process/PROCESS_NAME/restart"
+madprocs restart <process-name>
 ```
 
-### Search logs (fetch and grep)
+## Common Tasks
+
+### Check what's running
 ```bash
-curl -s "${MADPROCS_URL}/api/logs/PROCESS_NAME" | jq -r '.lines[].content' | grep -i "pattern"
+madprocs status
 ```
 
-## Quick One-Liners
-
-### Check process status
+### Find errors in a process's logs
 ```bash
-curl -s "$(cat .madprocs.port)/api/processes" | jq '.[] | {name, state}'
-```
-
-### Find errors in logs
-```bash
-curl -s "$(cat .madprocs.port)/api/logs/PROCESS_NAME" | jq -r '.lines[].content' | grep -iE 'error|exception|fatal'
+madprocs logs server | grep -iE 'error|exception|fatal'
 ```
 
 ### Get recent logs (last 50 lines)
 ```bash
-curl -s "$(cat .madprocs.port)/api/logs/PROCESS_NAME" | jq -r '.lines[-50:][].content'
+madprocs logs server | tail -50
 ```
 
 ### Restart a failing process
 ```bash
-curl -s -X POST "$(cat .madprocs.port)/api/process/PROCESS_NAME/restart"
+madprocs restart server
+madprocs status
 ```
 
 ## TUI Keyboard Shortcuts
@@ -118,7 +93,6 @@ procs:
 
 ## Tips
 
-1. **Always read `.madprocs.port` first** - This is the only reliable way to get the correct URL
-2. **Check process names** - Use `/api/processes` to get the exact process names before other operations
-3. **Use jq for parsing** - The API returns JSON, use jq to extract what you need
-4. **Web UI for detailed viewing** - For complex log analysis, suggest the user press `w` to open the web UI
+1. **Always run `madprocs status` first** - This shows all processes and their current state
+2. **Use grep to search logs** - `madprocs logs <name> | grep "pattern"`
+3. **Web UI for detailed viewing** - For complex log analysis, suggest the user press `w` to open the web UI
