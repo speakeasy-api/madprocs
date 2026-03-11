@@ -6,16 +6,45 @@ You are helping the user control a running madprocs instance - a multi-process d
 
 madprocs runs multiple development processes (defined in `mprocs.yaml`) and displays their logs in a TUI. The user has madprocs running in a separate terminal window.
 
-## How to Help
+**Important**: madprocs exposes a web API that you can use to control processes and fetch logs. The default URL is `http://localhost:3000` but check with the user for the actual port.
 
-When the user asks you to interact with madprocs, guide them with the appropriate keyboard shortcuts or help them with:
+## Web API
 
-1. **Process control** - starting, stopping, restarting processes
-2. **Log searching** - finding specific output in logs
-3. **Navigation** - switching between processes
-4. **Web UI** - opening the browser-based log viewer
+Use these curl commands to control madprocs programmatically:
 
-## Keyboard Shortcuts
+### List all processes and their status
+```bash
+curl -s http://localhost:3000/api/processes | jq
+```
+
+### Get logs for a specific process
+```bash
+curl -s http://localhost:3000/api/logs/PROCESS_NAME | jq
+```
+
+### Start a process
+```bash
+curl -s -X POST http://localhost:3000/api/process/PROCESS_NAME/start
+```
+
+### Stop a process
+```bash
+curl -s -X POST http://localhost:3000/api/process/PROCESS_NAME/stop
+```
+
+### Restart a process
+```bash
+curl -s -X POST http://localhost:3000/api/process/PROCESS_NAME/restart
+```
+
+### Search logs (fetch and grep)
+```bash
+curl -s http://localhost:3000/api/logs/PROCESS_NAME | jq -r '.lines[].content' | grep -i "pattern"
+```
+
+## TUI Keyboard Shortcuts
+
+If the user needs to interact with the TUI directly, guide them with these shortcuts:
 
 | Key | Action |
 |-----|--------|
@@ -30,25 +59,33 @@ When the user asks you to interact with madprocs, guide them with the appropriat
 | `?` | Search logs (regex match) |
 | `n` | Jump to next search match |
 | `N` | Jump to previous search match |
-| `Enter` | Next match (while in search mode) |
 | `Esc` | Exit search mode |
 | `z` | Toggle fullscreen log view (zoom) |
 | `w` | Open web UI in browser |
 
-## Search Tips
+## Common Tasks
 
-- **Substring search** (`/`): Case-insensitive, finds exact substrings
-- **Regex search** (`?`): Case-insensitive regex patterns (e.g., `error|warn`, `\d{3}`)
+### Check process status
+```bash
+curl -s http://localhost:3000/api/processes | jq '.[] | {name, state}'
+```
 
-## Web UI
+### Find errors in logs
+```bash
+curl -s http://localhost:3000/api/logs/PROCESS_NAME | jq -r '.lines[].content' | grep -iE 'error|exception|fatal'
+```
 
-The web UI provides:
-- Full log history with ANSI color support
-- Search and filtering
-- Process control (start/stop/restart buttons)
-- Log download
+### Get recent logs (last 50 lines)
+```bash
+curl -s http://localhost:3000/api/logs/PROCESS_NAME | jq -r '.lines[-50:][].content'
+```
 
-Access it by pressing `w` in the TUI, or visit the URL shown in the status bar (default: `http://localhost:3000`).
+### Restart a failing process
+```bash
+curl -s -X POST http://localhost:3000/api/process/PROCESS_NAME/restart
+# Then check if it's running:
+curl -s http://localhost:3000/api/processes | jq '.[] | select(.name=="PROCESS_NAME")'
+```
 
 ## Configuration
 
@@ -66,16 +103,9 @@ procs:
       PORT: "3001"
 ```
 
-## Common Tasks
+## Tips
 
-### "Find errors in the logs"
-Tell the user: Press `/` then type `error` and press Enter. Use `n`/`N` to navigate matches.
-
-### "Restart the API server"
-Tell the user: Use `j`/`k` to select the API process, then press `r` to restart it.
-
-### "Stop all processes and quit"
-Tell the user: Press `q` to quit - madprocs will gracefully stop all processes.
-
-### "View logs in browser"
-Tell the user: Press `w` to open the web UI, which provides a more detailed view with full scrollback.
+1. **Always confirm the port** - Ask the user what port madprocs is running on if curl commands fail
+2. **Use jq for parsing** - The API returns JSON, use jq to extract what you need
+3. **Check process names** - Use `/api/processes` to get the exact process names before other operations
+4. **Web UI for detailed viewing** - For complex log analysis, suggest the user press `w` to open the web UI

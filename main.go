@@ -1,9 +1,11 @@
 package main
 
 import (
+	"embed"
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -14,11 +16,22 @@ import (
 	"github.com/speakeasy-api/madprocs/web"
 )
 
+//go:embed .claude/commands/madprocs.md
+var skillContent embed.FS
+
 var (
 	version = "dev"
 )
 
 func main() {
+	// Handle subcommands first
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "skill":
+			handleSkillCommand(os.Args[2:])
+			return
+		}
+	}
 	var (
 		configPath   string
 		webOnly      bool
@@ -138,4 +151,90 @@ func main() {
 	}
 
 	manager.Close()
+}
+
+func handleSkillCommand(args []string) {
+	if len(args) == 0 {
+		fmt.Println("Usage: madprocs skill <command>")
+		fmt.Println("")
+		fmt.Println("Commands:")
+		fmt.Println("  install    Install Claude Code skill to current project")
+		fmt.Println("  uninstall  Remove Claude Code skill from current project")
+		os.Exit(1)
+	}
+
+	switch args[0] {
+	case "install":
+		installSkill()
+	case "uninstall":
+		uninstallSkill()
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown skill command: %s\n", args[0])
+		os.Exit(1)
+	}
+}
+
+func installSkill() {
+	// Read the embedded skill content
+	content, err := skillContent.ReadFile(".claude/commands/madprocs.md")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading skill content: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Create .claude/commands directory
+	skillDir := filepath.Join(".claude", "commands")
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating directory: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Write the skill file
+	skillPath := filepath.Join(skillDir, "madprocs.md")
+	if err := os.WriteFile(skillPath, content, 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing skill file: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Add to .git/info/exclude if git repo exists
+	gitExclude := filepath.Join(".git", "info", "exclude")
+	if _, err := os.Stat(".git"); err == nil {
+		// Ensure .git/info exists
+		os.MkdirAll(filepath.Join(".git", "info"), 0755)
+
+		// Read existing excludes
+		excludeContent, _ := os.ReadFile(gitExclude)
+		excludeLine := ".claude/commands/madprocs.md"
+
+		// Add if not already present
+		if !strings.Contains(string(excludeContent), excludeLine) {
+			f, err := os.OpenFile(gitExclude, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err == nil {
+				if len(excludeContent) > 0 && !strings.HasSuffix(string(excludeContent), "\n") {
+					f.WriteString("\n")
+				}
+				f.WriteString(excludeLine + "\n")
+				f.Close()
+			}
+		}
+	}
+
+	fmt.Printf("Installed madprocs skill to %s\n", skillPath)
+	fmt.Println("")
+	fmt.Println("Use /madprocs in Claude Code to get help controlling madprocs.")
+}
+
+func uninstallSkill() {
+	skillPath := filepath.Join(".claude", "commands", "madprocs.md")
+
+	if err := os.Remove(skillPath); err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("Skill not installed.")
+			return
+		}
+		fmt.Fprintf(os.Stderr, "Error removing skill file: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("Uninstalled madprocs skill.")
 }

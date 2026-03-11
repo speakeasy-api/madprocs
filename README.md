@@ -108,12 +108,20 @@ Press `w` to open the web UI in your browser, or access it at the URL shown in t
 
 ## Claude Code Integration
 
-madprocs includes a Claude Code skill for AI-assisted process control. Use `/madprocs` in Claude Code to get help with:
+madprocs includes a Claude Code skill for AI-assisted process control. Install it in your project:
 
-- Navigating and controlling processes
-- Searching logs effectively
+```bash
+madprocs skill install
+```
+
+Then use `/madprocs` in Claude Code to get help with:
+
+- Controlling processes via the web API
+- Searching and analyzing logs
 - Using keyboard shortcuts
 - Troubleshooting issues
+
+The skill teaches Claude how to use the madprocs web API (`/api/processes`, `/api/logs/{name}`, etc.) to programmatically control your processes.
 
 ## Why madprocs?
 
