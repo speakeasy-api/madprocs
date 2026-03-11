@@ -2,6 +2,14 @@
 
 You are helping the user control a running madprocs instance - a multi-process development harness with searchable logs.
 
+## Important: Disable Sandbox
+
+**All `madprocs` commands must be run with sandbox disabled** to allow localhost network access:
+
+```
+dangerouslyDisableSandbox: true
+```
+
 ## CLI Commands
 
 Use these commands to control madprocs. They communicate with the running instance automatically.
