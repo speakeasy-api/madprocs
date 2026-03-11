@@ -106,6 +106,15 @@ Press `w` to open the web UI in your browser, or access it at the URL shown in t
 - Process control (start/stop/restart)
 - Log download
 
+## Claude Code Integration
+
+madprocs includes a Claude Code skill for AI-assisted process control. Use `/madprocs` in Claude Code to get help with:
+
+- Navigating and controlling processes
+- Searching logs effectively
+- Using keyboard shortcuts
+- Troubleshooting issues
+
 ## Why madprocs?
 
 mprocs is great, but lacks log search functionality. When debugging across multiple services, being able to search logs is essential. madprocs adds this while maintaining full compatibility with mprocs configs.
