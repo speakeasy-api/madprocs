@@ -22,7 +22,7 @@ If the file doesn't exist, madprocs might not be running. Ask the user to start 
 
 First, get the base URL:
 ```bash
-MADPROCS_URL=$(cat .madprocs.port | tr -d '\n')
+MADPROCS_URL=$(cat .madprocs.port)
 ```
 
 Then use these commands:
@@ -61,22 +61,22 @@ curl -s "${MADPROCS_URL}/api/logs/PROCESS_NAME" | jq -r '.lines[].content' | gre
 
 ### Check process status
 ```bash
-curl -s "$(cat .madprocs.port | tr -d '\n')/api/processes" | jq '.[] | {name, state}'
+curl -s "$(cat .madprocs.port)/api/processes" | jq '.[] | {name, state}'
 ```
 
 ### Find errors in logs
 ```bash
-curl -s "$(cat .madprocs.port | tr -d '\n')/api/logs/PROCESS_NAME" | jq -r '.lines[].content' | grep -iE 'error|exception|fatal'
+curl -s "$(cat .madprocs.port)/api/logs/PROCESS_NAME" | jq -r '.lines[].content' | grep -iE 'error|exception|fatal'
 ```
 
 ### Get recent logs (last 50 lines)
 ```bash
-curl -s "$(cat .madprocs.port | tr -d '\n')/api/logs/PROCESS_NAME" | jq -r '.lines[-50:][].content'
+curl -s "$(cat .madprocs.port)/api/logs/PROCESS_NAME" | jq -r '.lines[-50:][].content'
 ```
 
 ### Restart a failing process
 ```bash
-curl -s -X POST "$(cat .madprocs.port | tr -d '\n')/api/process/PROCESS_NAME/restart"
+curl -s -X POST "$(cat .madprocs.port)/api/process/PROCESS_NAME/restart"
 ```
 
 ## TUI Keyboard Shortcuts

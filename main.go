@@ -125,7 +125,7 @@ func main() {
 	if cfg.TLSCert != "" && cfg.TLSKey != "" {
 		protocol = "https"
 	}
-	portInfo := fmt.Sprintf("%s://%s:%d\n", protocol, webServer.Host(), actualPort)
+	portInfo := fmt.Sprintf("%s://%s:%d", protocol, webServer.Host(), actualPort)
 	if err := os.WriteFile(portFile, []byte(portInfo), 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: could not write port file: %v\n", err)
 	} else {
