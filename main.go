@@ -119,6 +119,19 @@ func main() {
 	// Get the actual port (may be different if random port was used)
 	actualPort := webServer.Port()
 
+	// Write port file for CLI tools and Claude Code skill to discover
+	portFile := ".madprocs.port"
+	protocol := "http"
+	if cfg.TLSCert != "" && cfg.TLSKey != "" {
+		protocol = "https"
+	}
+	portInfo := fmt.Sprintf("%s://%s:%d\n", protocol, webServer.Host(), actualPort)
+	if err := os.WriteFile(portFile, []byte(portInfo), 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: could not write port file: %v\n", err)
+	} else {
+		defer os.Remove(portFile)
+	}
+
 	// Start all autostart processes
 	manager.StartAll()
 
