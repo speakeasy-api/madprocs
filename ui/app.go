@@ -662,6 +662,13 @@ func (m *Model) openWebUI() {
 		host = "localhost"
 	}
 	url := fmt.Sprintf("%s://%s:%d", protocol, host, m.webPort)
+
+	// Pass the currently selected process via URL hash
+	procs := m.manager.List()
+	if m.selected >= 0 && m.selected < len(procs) {
+		url += "#process=" + procs[m.selected].Name
+	}
+
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":

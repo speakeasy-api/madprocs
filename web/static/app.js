@@ -34,8 +34,13 @@ async function init() {
     connectWebSocket();
     setupEventListeners();
 
-    // Select first process by default (this does NOT reconnect WebSocket)
-    if (processes.length > 0) {
+    // Select process from URL hash or first process by default
+    const hashMatch = window.location.hash.match(/process=([^&]+)/);
+    const initialProcess = hashMatch ? decodeURIComponent(hashMatch[1]) : null;
+
+    if (initialProcess && processes.some(p => p.name === initialProcess)) {
+        selectProcess(initialProcess);
+    } else if (processes.length > 0) {
         selectProcess(processes[0].name);
     }
 
@@ -333,7 +338,9 @@ function setupEventListeners() {
     btnStart.addEventListener('click', () => processAction('start'));
     btnStop.addEventListener('click', () => processAction('stop'));
     btnRestart.addEventListener('click', () => processAction('restart'));
-    btnClear.addEventListener('click', () => {
+    btnClear.addEventListener('click', async () => {
+        if (!selectedProcess) return;
+        await fetch(`/api/process/${selectedProcess}/clear`, { method: 'POST' });
         logs = [];
         renderLogs();
     });

@@ -106,6 +106,8 @@ func (s *Server) handleProcessAction(w http.ResponseWriter, r *http.Request) {
 		err = proc.Stop()
 	case "restart":
 		err = proc.Restart()
+	case "clear":
+		proc.Buffer.Clear()
 	default:
 		http.Error(w, "Invalid action", http.StatusBadRequest)
 		return
