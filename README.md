@@ -10,7 +10,6 @@ A drop-in replacement for [mprocs](https://github.com/pvolok/mprocs) with search
 - **Searchable logs** - The key missing feature from mprocs
   - Substring search (`/`)
   - Regex search (`?`)
-  - Fuzzy search (`Ctrl+F`)
 - **PTY support** - Full terminal emulation for processes
 - **Web UI** - Browser-based log viewer (press `w` to open)
 - **Auto-scroll** - Follows new output, pauses when you scroll up
@@ -93,7 +92,6 @@ procs:
 | `r` | Restart selected process |
 | `/` | Search (substring) |
 | `?` | Search (regex) |
-| `Ctrl+F` | Search (fuzzy) |
 | `n/N` | Next/previous match |
 | `Enter` | Next match (in search mode) |
 | `Esc` | Exit search mode |

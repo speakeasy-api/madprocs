@@ -9,8 +9,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/sahilm/fuzzy"
 )
 
 // Line represents a single log line
@@ -179,41 +177,6 @@ func (b *Buffer) SearchRegex(pattern string) ([]int, error) {
 		}
 	}
 	return matches, nil
-}
-
-// SearchFuzzy performs fuzzy search and returns matching line indices
-func (b *Buffer) SearchFuzzy(query string) []int {
-	if query == "" {
-		return nil
-	}
-
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-
-	// Build string slice for fuzzy matching, tracking original indices
-	// Skip empty lines as fuzzy library panics on them
-	var contents []string
-	var originalIndices []int
-	for i := 0; i < b.count; i++ {
-		idx := (b.head + i) % b.capacity
-		content := b.lines[idx].Content
-		if strings.TrimSpace(content) != "" {
-			contents = append(contents, content)
-			originalIndices = append(originalIndices, i)
-		}
-	}
-
-	if len(contents) == 0 {
-		return nil
-	}
-
-	results := fuzzy.Find(query, contents)
-	matches := make([]int, len(results))
-	for i, r := range results {
-		// Map back to original line index
-		matches[i] = originalIndices[r.Index]
-	}
-	return matches
 }
 
 // GetLine returns a specific line by index

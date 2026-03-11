@@ -32,15 +32,12 @@ type SearchMode int
 const (
 	SearchSubstring SearchMode = iota
 	SearchRegex
-	SearchFuzzy
 )
 
 func (m SearchMode) String() string {
 	switch m {
 	case SearchRegex:
 		return "regex"
-	case SearchFuzzy:
-		return "fuzzy"
 	default:
 		return "text"
 	}
@@ -106,7 +103,6 @@ type keyMap struct {
 	Restart     key.Binding
 	Search      key.Binding
 	RegexSearch key.Binding
-	FuzzySearch key.Binding
 	NextMatch   key.Binding
 	PrevMatch   key.Binding
 	Escape      key.Binding
@@ -145,10 +141,6 @@ var keys = keyMap{
 	RegexSearch: key.NewBinding(
 		key.WithKeys("?"),
 		key.WithHelp("?", "regex"),
-	),
-	FuzzySearch: key.NewBinding(
-		key.WithKeys("ctrl+f"),
-		key.WithHelp("C-f", "fuzzy"),
 	),
 	NextMatch: key.NewBinding(
 		key.WithKeys("n"),
@@ -347,12 +339,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, keys.RegexSearch):
 			m.searchMode = SearchRegex
-			m.searchActive = true
-			m.focus = FocusSearch
-			m.searchInput = ""
-
-		case key.Matches(msg, keys.FuzzySearch):
-			m.searchMode = SearchFuzzy
 			m.searchActive = true
 			m.focus = FocusSearch
 			m.searchInput = ""
@@ -566,13 +552,6 @@ func wrapText(text string, width int) []string {
 	return strings.Split(wrapped, "\n")
 }
 
-func (m *Model) isActiveMatch(lineIdx int) bool {
-	if m.matchIndex >= 0 && m.matchIndex < len(m.matches) {
-		return m.matches[m.matchIndex].LineIdx == lineIdx
-	}
-	return false
-}
-
 // getActiveMatchForLine returns the active match if it's on this line, nil otherwise
 func (m *Model) getActiveMatchForLine(lineIdx int) *Match {
 	if m.matchIndex >= 0 && m.matchIndex < len(m.matches) {
@@ -589,7 +568,6 @@ func (m *Model) highlightMatch(content string, match *Match) string {
 		return content
 	}
 
-	// Use the specific match position
 	start := match.Start
 	end := match.End
 
@@ -622,8 +600,6 @@ func (m *Model) performSearch() {
 		if err == nil {
 			lineIndices = indices
 		}
-	case SearchFuzzy:
-		lineIndices = proc.Buffer.SearchFuzzy(m.searchInput)
 	default:
 		lineIndices = proc.Buffer.Search(m.searchInput)
 	}
