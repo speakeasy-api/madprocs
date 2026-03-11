@@ -190,17 +190,28 @@ func (b *Buffer) SearchFuzzy(query string) []int {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
-	// Build string slice for fuzzy matching
-	contents := make([]string, b.count)
+	// Build string slice for fuzzy matching, tracking original indices
+	// Skip empty lines as fuzzy library panics on them
+	var contents []string
+	var originalIndices []int
 	for i := 0; i < b.count; i++ {
 		idx := (b.head + i) % b.capacity
-		contents[i] = b.lines[idx].Content
+		content := b.lines[idx].Content
+		if strings.TrimSpace(content) != "" {
+			contents = append(contents, content)
+			originalIndices = append(originalIndices, i)
+		}
+	}
+
+	if len(contents) == 0 {
+		return nil
 	}
 
 	results := fuzzy.Find(query, contents)
 	matches := make([]int, len(results))
 	for i, r := range results {
-		matches[i] = r.Index
+		// Map back to original line index
+		matches[i] = originalIndices[r.Index]
 	}
 	return matches
 }
