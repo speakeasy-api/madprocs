@@ -175,6 +175,10 @@ function renderLogs() {
     const matchCount = logs.filter((_, i) => isMatch(logs[i])).length;
 
     logs.forEach((log, index) => {
+        // Skip empty log lines
+        if (!log.content || log.content.trim() === '') {
+            return;
+        }
         const line = createLogLine(log, index);
         logContent.appendChild(line);
     });
@@ -188,6 +192,10 @@ function renderLogs() {
 
 // Append a single log line
 function appendLog(log) {
+    // Skip empty log lines
+    if (!log.content || log.content.trim() === '') {
+        return;
+    }
     const line = createLogLine(log, logs.length - 1);
     logContent.appendChild(line);
 

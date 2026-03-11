@@ -20,7 +20,11 @@ A drop-in replacement for [mprocs](https://github.com/pvolok/mprocs) with search
 ## Installation
 
 ```bash
+# Using go install
 go install github.com/speakeasy-api/madprocs@latest
+
+# Using mise
+mise use -g github:speakeasy-api/madprocs@latest
 ```
 
 Or download a binary from the [releases page](https://github.com/speakeasy-api/madprocs/releases).
@@ -34,11 +38,17 @@ madprocs
 # Specify a config file
 madprocs -c myconfig.yaml
 
-# Change web UI port
-madprocs -port 8080
+# Change web UI port and host
+madprocs --port 8080 --host 0.0.0.0
 
 # Run web UI only (headless mode)
-madprocs -web-only
+madprocs --web-only
+
+# Enable TLS for web UI
+madprocs --tls-cert cert.pem --tls-key key.pem
+
+# Write logs to files
+madprocs --log-dir ./logs
 ```
 
 ## Configuration
@@ -59,6 +69,16 @@ procs:
 
   worker:
     shell: "python worker.py --verbose"
+```
+
+Environment variables are expanded in config values using `$VAR` or `${VAR}` syntax:
+
+```yaml
+procs:
+  api:
+    shell: "go run . --port $API_PORT"
+    env:
+      DATABASE_URL: "${DB_HOST}:${DB_PORT}"
 ```
 
 ## Keyboard Shortcuts

@@ -247,6 +247,7 @@ button:disabled {
 .log-timestamp {
     color: var(--text-muted);
     flex-shrink: 0;
+    user-select: none;
 }
 
 .log-text {

@@ -736,7 +736,6 @@ func (m Model) renderProcessList() string {
 
 	var items []string
 	items = append(items, titleStyle.Render("Processes"))
-	items = append(items, "")
 
 	for i, proc := range procs {
 		var stateIcon string

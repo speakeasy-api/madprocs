@@ -39,7 +39,7 @@ var (
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(primaryColor).
-			Padding(0, 1)
+			PaddingLeft(1)
 
 	// Log styles
 	timestampStyle = lipgloss.NewStyle().
