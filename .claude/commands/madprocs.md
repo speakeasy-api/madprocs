@@ -72,7 +72,7 @@ If the user needs to interact with the TUI directly, guide them with these short
 | `n` | Jump to next search match |
 | `N` | Jump to previous search match |
 | `Esc` | Exit search mode |
-| `z` | Toggle fullscreen log view (zoom) |
+| `t` | Toggle sidebar |
 | `w` | Open web UI in browser |
 
 ## Configuration

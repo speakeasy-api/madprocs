@@ -18,9 +18,25 @@ import (
 	"github.com/speakeasy-api/madprocs/log"
 )
 
-// Regex to match cursor movement and screen control ANSI sequences
-// This keeps color codes but removes cursor positioning, clearing, etc.
-var ansiCursorControlRegex = regexp.MustCompile(`\x1b\[[0-9;]*[HJKfABCDEFGsuhl]|\x1b\[\?[0-9;]*[hl]|\x1b7|\x1b8|\x1b\[2J|\x1b\[K`)
+// Regex to match cursor movement, screen control, and other non-color ANSI sequences.
+// Preserves SGR color codes (ending in 'm') but removes everything else:
+// - CSI sequences for cursor movement, erasing, scrolling, mode changes
+// - OSC sequences (title setting, hyperlinks, etc.)
+// - DEC private modes, save/restore cursor, alternate screen buffer
+var ansiCursorControlRegex = regexp.MustCompile(
+	`\x1b\[[0-9;]*[HJKfABCDEFGLMPSTXZdhlnqrsu]` + // CSI sequences (cursor, erase, scroll, mode)
+		`|\x1b\[\?[0-9;]*[hlsru]` + // DEC private mode set/reset/save/restore
+		`|\x1b[78DMEHcn=>]` + // Single-char escapes: save/restore cursor, index, etc.
+		`|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)` + // OSC sequences (terminated by BEL or ST)
+		`|\x1b\([0-9A-Za-z]` + // Character set designation
+		`|\x1b_[^\x1b]*\x1b\\` + // APC sequences
+		`|\x1bP[^\x1b]*\x1b\\`, // DCS sequences
+)
+
+// Regex to match sequences that rewind the cursor to the start of the line.
+// Tools like vite use \x1b[G or \x1b[1G (cursor to column 1) plus \x1b[2K (erase line)
+// to overwrite progress output in-place. We treat these like \r.
+var lineRewindRegex = regexp.MustCompile(`\x1b\[2K|\x1b\[1?G|\r`)
 
 // State represents the current state of a process
 type State int
@@ -218,12 +234,13 @@ func (p *Process) streamPtyOutput(ptmx *os.File) {
 		}
 		// Strip trailing newline and carriage return
 		line = strings.TrimRight(line, "\r\n")
-		// Strip cursor movement and screen control sequences (keep colors)
+		// Handle line rewrites: split on \r, \x1b[G, \x1b[1G, \x1b[2K (cursor-to-column-1
+		// and erase-line sequences). Tools like vite use these to update progress in-place.
+		// We keep only the content after the last rewind point.
+		parts := lineRewindRegex.Split(line, -1)
+		line = parts[len(parts)-1]
+		// Strip remaining cursor movement and screen control sequences (keep colors)
 		line = ansiCursorControlRegex.ReplaceAllString(line, "")
-		// Skip empty lines that were only control sequences
-		if strings.TrimSpace(line) == "" && line != "" {
-			continue
-		}
 		p.Buffer.Write(p.Name, "stdout", line)
 	}
 }

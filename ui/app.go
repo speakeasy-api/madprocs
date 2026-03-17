@@ -159,8 +159,8 @@ var keys = keyMap{
 		key.WithHelp("tab", "switch pane"),
 	),
 	Zoom: key.NewBinding(
-		key.WithKeys("z"),
-		key.WithHelp("z", "zoom"),
+		key.WithKeys("t"),
+		key.WithHelp("t", "toggle sidebar"),
 	),
 	Web: key.NewBinding(
 		key.WithKeys("w"),
@@ -503,11 +503,6 @@ func (m *Model) updateLogContent() {
 	m.lineToViewport = make(map[int]int)
 
 	for i, line := range lines {
-		// Skip empty log lines
-		if strings.TrimSpace(line.Content) == "" {
-			continue
-		}
-
 		// Track which viewport line this original line starts at
 		m.lineToViewport[i] = len(wrappedLines)
 
@@ -814,7 +809,7 @@ func (m Model) renderStatusBar() string {
 		statusKeyStyle.Render("r") + ":restart",
 		statusKeyStyle.Render("/") + ":search",
 		statusKeyStyle.Render("?") + ":regex",
-		statusKeyStyle.Render("z") + ":zoom",
+		statusKeyStyle.Render("t") + ":sidebar",
 		statusKeyStyle.Render("w") + ":web",
 		statusKeyStyle.Render("⇧") + ":select",
 	}

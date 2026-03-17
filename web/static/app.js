@@ -6,6 +6,7 @@ let searchQuery = '';
 let autoScroll = true;
 let intentionalClose = false;
 let reconnectTimeout = null;
+let reconnectDelay = 1000; // Start at 1s, exponential backoff up to 30s
 
 // ANSI to HTML converter
 const ansiUp = new AnsiUp();
@@ -139,15 +140,17 @@ function connectWebSocket() {
         connectionStatus.textContent = 'Connected';
         connectionStatus.className = 'status connected';
         intentionalClose = false;
+        reconnectDelay = 1000; // Reset backoff on successful connection
     };
 
     ws.onclose = () => {
         connectionStatus.textContent = 'Disconnected';
         connectionStatus.className = 'status disconnected';
 
-        // Only reconnect if this wasn't an intentional close
+        // Only reconnect if this wasn't an intentional close, with exponential backoff
         if (!intentionalClose) {
-            reconnectTimeout = setTimeout(connectWebSocket, 3000);
+            reconnectTimeout = setTimeout(connectWebSocket, reconnectDelay);
+            reconnectDelay = Math.min(reconnectDelay * 2, 30000); // Cap at 30s
         }
         intentionalClose = false;
     };
@@ -180,10 +183,6 @@ function renderLogs() {
     const matchCount = logs.filter((_, i) => isMatch(logs[i])).length;
 
     logs.forEach((log, index) => {
-        // Skip empty log lines
-        if (!log.content || log.content.trim() === '') {
-            return;
-        }
         const line = createLogLine(log, index);
         logContent.appendChild(line);
     });
@@ -197,10 +196,6 @@ function renderLogs() {
 
 // Append a single log line
 function appendLog(log) {
-    // Skip empty log lines
-    if (!log.content || log.content.trim() === '') {
-        return;
-    }
     const line = createLogLine(log, logs.length - 1);
     logContent.appendChild(line);
 

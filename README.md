@@ -95,7 +95,7 @@ procs:
 | `n/N` | Next/previous match |
 | `Enter` | Next match (in search mode) |
 | `Esc` | Exit search mode |
-| `z` | Zoom (toggle fullscreen logs) |
+| `t` | Toggle sidebar |
 | `w` | Open web UI |
 
 ## Web UI
