@@ -24,8 +24,10 @@ const btnStart = document.getElementById('btn-start');
 const btnStop = document.getElementById('btn-stop');
 const btnRestart = document.getElementById('btn-restart');
 const btnClear = document.getElementById('btn-clear');
+const btnCopy = document.getElementById('btn-copy');
 const btnDownload = document.getElementById('btn-download');
 const logViewer = document.getElementById('log-viewer');
+const toast = document.getElementById('toast');
 
 // Initialize
 async function init() {
@@ -79,10 +81,18 @@ function renderProcessList(processes) {
         indicator.className = `state-indicator state-${proc.state}`;
 
         const name = document.createElement('span');
+        name.className = 'proc-name';
         name.textContent = proc.name;
 
         li.appendChild(indicator);
         li.appendChild(name);
+
+        if (proc.uptime) {
+            const uptime = document.createElement('span');
+            uptime.className = 'proc-uptime';
+            uptime.textContent = proc.uptime;
+            li.appendChild(uptime);
+        }
 
         li.addEventListener('click', () => selectProcess(proc.name));
         processList.appendChild(li);
@@ -312,6 +322,21 @@ async function processAction(action) {
     }
 }
 
+// Copy all logs to clipboard
+function copyLogs() {
+    if (logs.length === 0) {
+        showToast('No logs to copy');
+        return;
+    }
+
+    const content = logs.map(log => `[${log.timestamp}] ${log.content}`).join('\n');
+    navigator.clipboard.writeText(content).then(() => {
+        showToast(`Copied ${logs.length} lines`);
+    }).catch(() => {
+        showToast('Failed to copy');
+    });
+}
+
 // Download logs
 function downloadLogs() {
     if (!selectedProcess || logs.length === 0) return;
@@ -328,6 +353,15 @@ function downloadLogs() {
     URL.revokeObjectURL(url);
 }
 
+// Show toast notification
+let toastTimer = null;
+function showToast(message) {
+    toast.textContent = message;
+    toast.classList.add('visible');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('visible'), 2000);
+}
+
 // Setup event listeners
 function setupEventListeners() {
     btnStart.addEventListener('click', () => processAction('start'));
@@ -339,6 +373,7 @@ function setupEventListeners() {
         logs = [];
         renderLogs();
     });
+    btnCopy.addEventListener('click', copyLogs);
     btnDownload.addEventListener('click', downloadLogs);
 
     searchInput.addEventListener('input', (e) => {
