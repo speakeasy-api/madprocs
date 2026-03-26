@@ -107,6 +107,7 @@ type keyMap struct {
 	PrevMatch   key.Binding
 	Escape      key.Binding
 	Tab         key.Binding
+	Clear       key.Binding
 	Zoom        key.Binding
 	Web         key.Binding
 	Quit        key.Binding
@@ -157,6 +158,10 @@ var keys = keyMap{
 	Tab: key.NewBinding(
 		key.WithKeys("tab"),
 		key.WithHelp("tab", "switch pane"),
+	),
+	Clear: key.NewBinding(
+		key.WithKeys("c"),
+		key.WithHelp("c", "clear"),
 	),
 	Zoom: key.NewBinding(
 		key.WithKeys("t"),
@@ -414,6 +419,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					procs[m.selected].Buffer.Clear()
 					procs[m.selected].Restart()
 					// Clear search state since logs are cleared
+					m.matches = nil
+					m.matchIndex = 0
+					m.updateLogContent()
+				}
+
+			case key.Matches(msg, keys.Clear):
+				if m.selected < len(procs) {
+					procs[m.selected].Buffer.Clear()
 					m.matches = nil
 					m.matchIndex = 0
 					m.updateLogContent()
@@ -807,6 +820,7 @@ func (m Model) renderStatusBar() string {
 		statusKeyStyle.Render("s") + ":start",
 		statusKeyStyle.Render("x") + ":stop",
 		statusKeyStyle.Render("r") + ":restart",
+		statusKeyStyle.Render("c") + ":clear",
 		statusKeyStyle.Render("/") + ":search",
 		statusKeyStyle.Render("?") + ":regex",
 		statusKeyStyle.Render("t") + ":sidebar",
