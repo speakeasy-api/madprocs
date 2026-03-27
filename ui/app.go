@@ -824,7 +824,7 @@ func (m Model) renderStatusBar() string {
 		statusKeyStyle.Render("/") + ":search",
 		statusKeyStyle.Render("?") + ":regex",
 		statusKeyStyle.Render("t") + ":sidebar",
-		statusKeyStyle.Render("w") + ":web",
+		statusKeyStyle.Render("w") + ":open web ui",
 		statusKeyStyle.Render("⇧") + ":select",
 	}
 	right := strings.Join(help, " ")
