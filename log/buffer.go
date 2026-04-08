@@ -192,17 +192,26 @@ func (b *Buffer) GetLine(i int) (Line, bool) {
 	return b.lines[idx], true
 }
 
-// Clear removes all lines from the buffer
+// Clear removes all lines from the buffer and notifies subscribers
 func (b *Buffer) Clear() {
 	b.mu.Lock()
-	defer b.mu.Unlock()
-	// Reset indices
 	b.head = 0
 	b.count = 0
-	// Zero out the lines slice to ensure old data is gone
 	for i := range b.lines {
 		b.lines[i] = Line{}
 	}
+	b.mu.Unlock()
+
+	// Notify subscribers about the clear
+	clearLine := Line{Stream: "clear"}
+	b.subMu.RLock()
+	for _, ch := range b.subscribers {
+		select {
+		case ch <- clearLine:
+		default:
+		}
+	}
+	b.subMu.RUnlock()
 }
 
 // Close closes the log file if open

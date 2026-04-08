@@ -96,6 +96,15 @@ func (h *Hub) Broadcast(process string, msg LogMessage) {
 	h.broadcast <- broadcastMsg{process: process, data: data}
 }
 
+// BroadcastEvent sends a typed event to all clients subscribed to a process
+func (h *Hub) BroadcastEvent(process string, eventType string) {
+	data, err := json.Marshal(map[string]string{"type": eventType, "process": process})
+	if err != nil {
+		return
+	}
+	h.broadcast <- broadcastMsg{process: process, data: data}
+}
+
 // handleWebSocket handles WebSocket connections
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Get process name from path parameter (Go 1.22+)

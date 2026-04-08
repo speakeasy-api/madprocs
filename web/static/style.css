@@ -444,6 +444,19 @@ header h1 {
     border-left-color: var(--warning);
 }
 
+.log-line.active-match {
+    background: var(--warning);
+    border-left-color: var(--warning);
+}
+
+.log-line.active-match .log-timestamp {
+    color: #000;
+}
+
+.log-line.active-match .log-text {
+    color: #000;
+}
+
 .highlight {
     background: var(--warning);
     color: #000;

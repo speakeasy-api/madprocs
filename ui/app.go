@@ -376,6 +376,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.updateLogContent()
 			}
 
+		case key.Matches(msg, keys.Clear):
+			procs := m.manager.List()
+			if m.selected < len(procs) {
+				procs[m.selected].Buffer.Clear()
+				m.matches = nil
+				m.matchIndex = 0
+				m.updateLogContent()
+			}
+
 		case key.Matches(msg, keys.Escape):
 			if m.searchActive {
 				m.searchActive = false
@@ -424,13 +433,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.updateLogContent()
 				}
 
-			case key.Matches(msg, keys.Clear):
-				if m.selected < len(procs) {
-					procs[m.selected].Buffer.Clear()
-					m.matches = nil
-					m.matchIndex = 0
-					m.updateLogContent()
-				}
 			}
 		}
 

@@ -3,6 +3,7 @@ let selectedProcess = null;
 let logs = [];
 let ws = null;
 let searchQuery = '';
+let currentMatchIndex = -1;
 let autoScroll = true;
 let intentionalClose = false;
 let reconnectTimeout = null;
@@ -166,18 +167,28 @@ function connectWebSocket() {
     };
 
     ws.onmessage = (event) => {
-        const log = JSON.parse(event.data);
+        const msg = JSON.parse(event.data);
+
+        // Handle clear events
+        if (msg.type === 'clear') {
+            if (!selectedProcess || msg.process === selectedProcess) {
+                logs = [];
+                currentMatchIndex = -1;
+                renderLogs();
+            }
+            return;
+        }
 
         // Only add if it's for the selected process
-        if (!selectedProcess || log.process === selectedProcess) {
-            logs.push(log);
+        if (!selectedProcess || msg.process === selectedProcess) {
+            logs.push(msg);
 
             // Limit log size
             if (logs.length > 10000) {
                 logs = logs.slice(-5000);
             }
 
-            appendLog(log);
+            appendLog(msg);
         }
     };
 
@@ -286,6 +297,18 @@ function escapeRegex(string) {
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// Jump to next search match
+function jumpToNextMatch() {
+    const matchLines = logContent.querySelectorAll('.log-line.match');
+    if (matchLines.length === 0) return;
+
+    currentMatchIndex = (currentMatchIndex + 1) % matchLines.length;
+    matchLines.forEach(el => el.classList.remove('active-match'));
+    matchLines[currentMatchIndex].classList.add('active-match');
+    matchLines[currentMatchIndex].scrollIntoView({ block: 'center', behavior: 'smooth' });
+    autoScroll = false;
+}
+
 // Update stats
 function updateStats(matchCount) {
     logStats.textContent = `${logs.length} lines`;
@@ -322,6 +345,11 @@ async function processAction(action) {
     }
 }
 
+// Strip ANSI escape codes from text
+function stripAnsi(text) {
+    return text.replace(/\x1b\[[\d;]*[A-Za-z]/g, '');
+}
+
 // Copy all logs to clipboard
 function copyLogs() {
     if (logs.length === 0) {
@@ -329,7 +357,7 @@ function copyLogs() {
         return;
     }
 
-    const content = logs.map(log => `[${log.timestamp}] ${log.content}`).join('\n');
+    const content = logs.map(log => `[${log.timestamp}] ${stripAnsi(log.content)}`).join('\n');
     navigator.clipboard.writeText(content).then(() => {
         showToast(`Copied ${logs.length} lines`);
     }).catch(() => {
@@ -341,7 +369,7 @@ function copyLogs() {
 function downloadLogs() {
     if (!selectedProcess || logs.length === 0) return;
 
-    const content = logs.map(log => `[${log.timestamp}] ${log.content}`).join('\n');
+    const content = logs.map(log => `[${log.timestamp}] ${stripAnsi(log.content)}`).join('\n');
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
 
@@ -378,7 +406,15 @@ function setupEventListeners() {
 
     searchInput.addEventListener('input', (e) => {
         searchQuery = e.target.value;
+        currentMatchIndex = -1;
         renderLogs();
+    });
+
+    searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && searchQuery) {
+            e.preventDefault();
+            jumpToNextMatch();
+        }
     });
 
     // Disable auto-scroll when user scrolls up

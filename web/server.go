@@ -197,6 +197,10 @@ func (s *Server) subscribeToAllLogs() {
 		go func(p *process.Process) {
 			ch := p.Buffer.Subscribe()
 			for line := range ch {
+				if line.Stream == "clear" {
+					s.hub.BroadcastEvent(p.Name, "clear")
+					continue
+				}
 				s.hub.Broadcast(p.Name, LogMessage{
 					Timestamp: line.Timestamp.Format("15:04:05"),
 					Content:   line.Content,
