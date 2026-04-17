@@ -106,6 +106,7 @@ type keyMap struct {
 	NextMatch   key.Binding
 	PrevMatch   key.Binding
 	Escape      key.Binding
+	ExitTUI     key.Binding
 	Tab         key.Binding
 	Clear       key.Binding
 	Zoom        key.Binding
@@ -154,6 +155,10 @@ var keys = keyMap{
 	Escape: key.NewBinding(
 		key.WithKeys("esc"),
 		key.WithHelp("esc", "cancel"),
+	),
+	ExitTUI: key.NewBinding(
+		key.WithKeys("shift+tab"),
+		key.WithHelp("shift+tab", "exit tui mode"),
 	),
 	Tab: key.NewBinding(
 		key.WithKeys("tab"),
@@ -302,11 +307,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		// TUI passthrough: when log pane is focused on a TUI process, forward all
-		// keys to the PTY. Tab or Esc returns focus to the process list.
+		// keys to the PTY. Shift+Esc returns focus to the process list.
 		if m.focus == FocusLogs {
 			procs := m.manager.List()
 			if m.selected < len(procs) && procs[m.selected].IsInTuiMode() {
-				if key.Matches(msg, keys.Tab) {
+				if key.Matches(msg, keys.ExitTUI) {
 					m.focus = FocusList
 				} else if data := keyMsgToBytes(msg); len(data) > 0 {
 					procs[m.selected].WriteInput(data) //nolint:errcheck
@@ -943,7 +948,7 @@ func (m Model) renderStatusBar() string {
 	var help []string
 	if inTuiPassthrough {
 		help = []string{
-			statusKeyStyle.Render("tab") + ":exit tui mode",
+			statusKeyStyle.Render("shift+tab") + ":exit tui mode",
 		}
 	} else {
 		help = []string{
