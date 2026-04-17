@@ -3,6 +3,7 @@ package process
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/creack/pty"
+	"github.com/hinshun/vt10x"
 	"github.com/speakeasy-api/madprocs/config"
 	"github.com/speakeasy-api/madprocs/log"
 )
@@ -73,6 +75,41 @@ type Process struct {
 	exitCode   int
 	startTime  time.Time
 	cancelFunc context.CancelFunc
+	term       vt10x.Terminal // non-nil only for TUI processes while running
+}
+
+// IsTui returns true if this process uses TUI mode.
+func (p *Process) IsTui() bool {
+	return p.Config.Tui
+}
+
+// WriteInput sends raw bytes to the process PTY (for TUI key passthrough).
+func (p *Process) WriteInput(data []byte) error {
+	p.mu.RLock()
+	f := p.ptyFile
+	p.mu.RUnlock()
+	if f == nil {
+		return nil
+	}
+	_, err := f.Write(data)
+	return err
+}
+
+// ResizeTui resizes the virtual terminal and PTY to the given dimensions.
+// Called by the UI when the log viewport changes size.
+func (p *Process) ResizeTui(cols, rows int) {
+	if cols <= 0 || rows <= 0 {
+		return
+	}
+	p.mu.RLock()
+	f := p.ptyFile
+	term := p.term
+	p.mu.RUnlock()
+	if f == nil || term == nil {
+		return
+	}
+	term.Resize(cols, rows)
+	pty.Setsize(f, &pty.Winsize{Rows: uint16(rows), Cols: uint16(cols)}) //nolint:errcheck
 }
 
 // NewProcess creates a new Process instance
@@ -194,7 +231,12 @@ func (p *Process) Start() error {
 	}
 
 	// Set PTY size
-	pty.Setsize(ptmx, &pty.Winsize{Rows: 24, Cols: 120})
+	if p.Config.Tui {
+		tuiCols, tuiRows := p.tuiSize()
+		pty.Setsize(ptmx, &pty.Winsize{Rows: uint16(tuiRows), Cols: uint16(tuiCols)})
+	} else {
+		pty.Setsize(ptmx, &pty.Winsize{Rows: 24, Cols: 120})
+	}
 
 	p.cmd = cmd
 	p.ptyFile = ptmx
@@ -203,7 +245,11 @@ func (p *Process) Start() error {
 	p.mu.Unlock()
 
 	// Stream PTY output (combined stdout/stderr)
-	go p.streamPtyOutput(ptmx)
+	if p.Config.Tui {
+		go p.streamTuiOutput(ptmx)
+	} else {
+		go p.streamPtyOutput(ptmx)
+	}
 
 	// Wait for process to exit
 	go p.wait()
@@ -243,6 +289,172 @@ func (p *Process) streamPtyOutput(ptmx *os.File) {
 		line = ansiCursorControlRegex.ReplaceAllString(line, "")
 		p.Buffer.Write(p.Name, "stdout", line)
 	}
+}
+
+// tuiSize returns the virtual terminal dimensions for a TUI process.
+// Defaults to 200x50 if not configured.
+func (p *Process) tuiSize() (cols, rows int) {
+	cols = p.Config.TuiCols
+	if cols <= 0 {
+		cols = 200
+	}
+	rows = p.Config.TuiRows
+	if rows <= 0 {
+		rows = 50
+	}
+	return cols, rows
+}
+
+// streamTuiOutput runs a virtual terminal emulator for TUI processes.
+// Instead of reading line-by-line, it feeds raw PTY bytes into a VTE,
+// takes periodic screen snapshots, and writes them to the log buffer.
+func (p *Process) streamTuiOutput(ptmx *os.File) {
+	initialCols, initialRows := p.tuiSize()
+	term := vt10x.New(vt10x.WithSize(initialCols, initialRows))
+
+	p.mu.Lock()
+	p.term = term
+	p.mu.Unlock()
+
+	var prevLines []string
+	done := make(chan struct{})
+	ticker := time.NewTicker(150 * time.Millisecond)
+
+	go func() {
+		defer func() {
+			ticker.Stop()
+			p.mu.Lock()
+			p.term = nil
+			p.mu.Unlock()
+		}()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				term.Lock()
+				lines := snapshotTuiScreen(term)
+				term.Unlock()
+
+				if tuiLinesEqual(lines, prevLines) {
+					continue
+				}
+				prevLines = lines
+
+				p.Buffer.Clear()
+				for _, line := range lines {
+					p.Buffer.Write(p.Name, "tui", line)
+				}
+			}
+		}
+	}()
+
+	buf := make([]byte, 32*1024)
+	for {
+		n, err := ptmx.Read(buf)
+		if n > 0 {
+			term.Write(buf[:n]) //nolint:errcheck
+		}
+		if err != nil {
+			close(done)
+			return
+		}
+	}
+}
+
+// snapshotTuiScreen renders the virtual terminal state as ANSI-colored text lines.
+// Every cell in every row is emitted with its explicit color/attribute state so that
+// background fills match the TUI's own background exactly — no trimming.
+// Must be called with term.Lock() held.
+func snapshotTuiScreen(term vt10x.Terminal) []string {
+	cols, rows := term.Size()
+	const (
+		attrReverse   = 1 << 0
+		attrUnderline = 1 << 1
+		attrBold      = 1 << 2
+		attrItalic    = 1 << 4
+	)
+
+	lines := make([]string, rows)
+	for y := 0; y < rows; y++ {
+		var sb strings.Builder
+		var prevFG, prevBG vt10x.Color = vt10x.DefaultFG, vt10x.DefaultBG
+		var prevMode int16
+
+		for x := 0; x < cols; x++ {
+			g := term.Cell(x, y)
+
+			if g.FG != prevFG || g.BG != prevBG || g.Mode != prevMode {
+				sb.WriteString("\x1b[0m")
+				if g.Mode&attrBold != 0 {
+					sb.WriteString("\x1b[1m")
+				}
+				if g.Mode&attrItalic != 0 {
+					sb.WriteString("\x1b[3m")
+				}
+				if g.Mode&attrUnderline != 0 {
+					sb.WriteString("\x1b[4m")
+				}
+				if g.Mode&attrReverse != 0 {
+					sb.WriteString("\x1b[7m")
+				}
+				if g.FG != vt10x.DefaultFG {
+					sb.WriteString(tuiColorANSI(g.FG, true))
+				}
+				if g.BG != vt10x.DefaultBG {
+					sb.WriteString(tuiColorANSI(g.BG, false))
+				}
+				prevFG = g.FG
+				prevBG = g.BG
+				prevMode = g.Mode
+			}
+
+			ch := g.Char
+			if ch == 0 {
+				ch = ' '
+			}
+			sb.WriteRune(ch)
+		}
+		sb.WriteString("\x1b[0m")
+		lines[y] = sb.String()
+	}
+	return lines
+}
+
+// tuiColorANSI converts a vt10x Color to an ANSI SGR escape sequence.
+// fg=true for foreground color, fg=false for background.
+func tuiColorANSI(c vt10x.Color, fg bool) string {
+	if c.ANSI() {
+		n := int(c)
+		if fg {
+			if n < 8 {
+				return fmt.Sprintf("\x1b[%dm", 30+n)
+			}
+			return fmt.Sprintf("\x1b[%dm", 90+(n-8))
+		}
+		if n < 8 {
+			return fmt.Sprintf("\x1b[%dm", 40+n)
+		}
+		return fmt.Sprintf("\x1b[%dm", 100+(n-8))
+	}
+	// 256-color palette
+	if fg {
+		return fmt.Sprintf("\x1b[38;5;%dm", c)
+	}
+	return fmt.Sprintf("\x1b[48;5;%dm", c)
+}
+
+// tuiLinesEqual returns true if two string slices are identical.
+func tuiLinesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func (p *Process) wait() {

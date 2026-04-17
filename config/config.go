@@ -41,6 +41,9 @@ type ProcConfig struct {
 	Stop        StopConfig         `yaml:"-"` // custom unmarshaling
 	StopRaw     interface{}        `yaml:"stop"`
 	LogDir      string             `yaml:"log_dir"`
+	Tui         bool               `yaml:"tui"`
+	TuiCols     int                `yaml:"tui_cols"`
+	TuiRows     int                `yaml:"tui_rows"`
 }
 
 // StringOrSlice handles YAML fields that can be either a string or []string

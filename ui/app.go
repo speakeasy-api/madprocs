@@ -224,6 +224,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.updateViewportSize()
+		// Resize TUI processes to match the log viewport
+		for _, proc := range m.manager.List() {
+			if proc.IsTui() {
+				proc.ResizeTui(m.viewport.Width, m.viewport.Height)
+			}
+		}
 		// Subscribe on first window size message (initial setup)
 		if !m.ready {
 			m.ready = true
@@ -295,6 +301,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.waitForLog())
 
 	case tea.KeyMsg:
+		// TUI passthrough: when log pane is focused on a TUI process, forward all
+		// keys to the PTY. Tab or Esc returns focus to the process list.
+		if m.focus == FocusLogs {
+			procs := m.manager.List()
+			if m.selected < len(procs) && procs[m.selected].IsTui() {
+				if key.Matches(msg, keys.Tab) {
+					m.focus = FocusList
+				} else if data := keyMsgToBytes(msg); len(data) > 0 {
+					procs[m.selected].WriteInput(data) //nolint:errcheck
+				}
+				return m, tea.Batch(cmds...)
+			}
+		}
+
 		// Handle search input first
 		if m.searchActive && m.focus == FocusSearch {
 			switch {
@@ -521,8 +541,21 @@ func (m *Model) updateLogContent() {
 		// Track which viewport line this original line starts at
 		m.lineToViewport[i] = len(wrappedLines)
 
-		ts := timestampStyle.Render(line.Timestamp.Format("[15:04:05]"))
 		content := line.Content
+
+		// TUI snapshot lines: render as-is without timestamp or word-wrap.
+		// The content is already a fixed-width rendered screen cell row.
+		if line.Stream == "tui" {
+			if m.searchInput != "" {
+				if match := m.getActiveMatchForLine(i); match != nil {
+					content = m.highlightMatch(content, match)
+				}
+			}
+			wrappedLines = append(wrappedLines, content)
+			continue
+		}
+
+		ts := timestampStyle.Render(line.Timestamp.Format("[15:04:05]"))
 
 		// Highlight only the active match (orange background)
 		if m.searchInput != "" {
@@ -811,23 +844,120 @@ func (m Model) renderSearchBar() string {
 	return searchInputStyle.Width(m.width - 4).Render(prompt + "█")
 }
 
+// keyMsgToBytes converts a bubbletea key message to the raw byte sequence
+// that should be sent to a PTY for TUI key passthrough.
+func keyMsgToBytes(msg tea.KeyMsg) []byte {
+	switch msg.Type {
+	case tea.KeyRunes:
+		return []byte(string(msg.Runes))
+	case tea.KeyEnter:
+		return []byte{'\r'}
+	case tea.KeyBackspace:
+		return []byte{127}
+	case tea.KeyTab:
+		return []byte{'\t'}
+	case tea.KeySpace:
+		return []byte{' '}
+	case tea.KeyEsc:
+		return []byte{'\x1b'}
+	case tea.KeyUp:
+		return []byte{'\x1b', '[', 'A'}
+	case tea.KeyDown:
+		return []byte{'\x1b', '[', 'B'}
+	case tea.KeyRight:
+		return []byte{'\x1b', '[', 'C'}
+	case tea.KeyLeft:
+		return []byte{'\x1b', '[', 'D'}
+	case tea.KeyPgUp:
+		return []byte{'\x1b', '[', '5', '~'}
+	case tea.KeyPgDown:
+		return []byte{'\x1b', '[', '6', '~'}
+	case tea.KeyHome:
+		return []byte{'\x1b', '[', 'H'}
+	case tea.KeyEnd:
+		return []byte{'\x1b', '[', 'F'}
+	case tea.KeyDelete:
+		return []byte{'\x1b', '[', '3', '~'}
+	case tea.KeyCtrlA:
+		return []byte{1}
+	case tea.KeyCtrlB:
+		return []byte{2}
+	case tea.KeyCtrlC:
+		return []byte{3}
+	case tea.KeyCtrlD:
+		return []byte{4}
+	case tea.KeyCtrlE:
+		return []byte{5}
+	case tea.KeyCtrlF:
+		return []byte{6}
+	case tea.KeyCtrlG:
+		return []byte{7}
+	case tea.KeyCtrlH:
+		return []byte{8}
+	case tea.KeyCtrlJ:
+		return []byte{'\n'}
+	case tea.KeyCtrlK:
+		return []byte{11}
+	case tea.KeyCtrlL:
+		return []byte{12}
+	case tea.KeyCtrlN:
+		return []byte{14}
+	case tea.KeyCtrlO:
+		return []byte{15}
+	case tea.KeyCtrlP:
+		return []byte{16}
+	case tea.KeyCtrlQ:
+		return []byte{17}
+	case tea.KeyCtrlR:
+		return []byte{18}
+	case tea.KeyCtrlS:
+		return []byte{19}
+	case tea.KeyCtrlT:
+		return []byte{20}
+	case tea.KeyCtrlU:
+		return []byte{21}
+	case tea.KeyCtrlV:
+		return []byte{22}
+	case tea.KeyCtrlW:
+		return []byte{23}
+	case tea.KeyCtrlX:
+		return []byte{24}
+	case tea.KeyCtrlY:
+		return []byte{25}
+	case tea.KeyCtrlZ:
+		return []byte{26}
+	}
+	return nil
+}
+
 func (m Model) renderStatusBar() string {
 	running := m.manager.RunningCount()
 	total := m.manager.Count()
 
 	left := fmt.Sprintf(" %d/%d running", running, total)
 
-	help := []string{
-		statusKeyStyle.Render("q") + ":quit",
-		statusKeyStyle.Render("s") + ":start",
-		statusKeyStyle.Render("x") + ":stop",
-		statusKeyStyle.Render("r") + ":restart",
-		statusKeyStyle.Render("c") + ":clear",
-		statusKeyStyle.Render("/") + ":search",
-		statusKeyStyle.Render("?") + ":regex",
-		statusKeyStyle.Render("t") + ":sidebar",
-		statusKeyStyle.Render("w") + ":open web ui",
-		statusKeyStyle.Render("⇧") + ":select",
+	// Show TUI passthrough hint when log pane focused on a TUI process
+	procs := m.manager.List()
+	inTuiPassthrough := m.focus == FocusLogs && m.selected < len(procs) && procs[m.selected].IsTui()
+
+	var help []string
+	if inTuiPassthrough {
+		help = []string{
+			statusKeyStyle.Render("tab") + ":exit tui mode",
+		}
+	} else {
+		help = []string{
+			statusKeyStyle.Render("q") + ":quit",
+			statusKeyStyle.Render("s") + ":start",
+			statusKeyStyle.Render("x") + ":stop",
+			statusKeyStyle.Render("r") + ":restart",
+			statusKeyStyle.Render("c") + ":clear",
+			statusKeyStyle.Render("/") + ":search",
+			statusKeyStyle.Render("?") + ":regex",
+			statusKeyStyle.Render("t") + ":sidebar",
+			statusKeyStyle.Render("w") + ":open web ui",
+			statusKeyStyle.Render("⇧") + ":select",
+		}
 	}
 	right := strings.Join(help, " ")
 
