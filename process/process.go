@@ -2,6 +2,7 @@ package process
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -68,19 +69,24 @@ type Process struct {
 	Config config.ProcConfig
 	Buffer *log.Buffer
 
-	mu         sync.RWMutex
-	cmd        *exec.Cmd
-	ptyFile    *os.File
-	state      State
-	exitCode   int
-	startTime  time.Time
-	cancelFunc context.CancelFunc
-	term       vt10x.Terminal // non-nil only for TUI processes while running
+	mu           sync.RWMutex
+	cmd          *exec.Cmd
+	ptyFile      *os.File
+	state        State
+	exitCode     int
+	startTime    time.Time
+	cancelFunc   context.CancelFunc
+	term         vt10x.Terminal // non-nil only while in alt-screen TUI mode
+	viewportCols int            // last viewport width reported by UI
+	viewportRows int            // last viewport height reported by UI
 }
 
-// IsTui returns true if this process uses TUI mode.
-func (p *Process) IsTui() bool {
-	return p.Config.Tui
+// IsInTuiMode returns true when the process is currently in alt-screen TUI mode.
+// The UI uses this to enable key passthrough.
+func (p *Process) IsInTuiMode() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.term != nil
 }
 
 // WriteInput sends raw bytes to the process PTY (for TUI key passthrough).
@@ -95,21 +101,24 @@ func (p *Process) WriteInput(data []byte) error {
 	return err
 }
 
-// ResizeTui resizes the virtual terminal and PTY to the given dimensions.
-// Called by the UI when the log viewport changes size.
+// ResizeTui stores the current viewport dimensions and, if the process is
+// currently in TUI mode, resizes the virtual terminal and PTY immediately.
+// Called by the UI on every WindowSizeMsg for all processes.
 func (p *Process) ResizeTui(cols, rows int) {
 	if cols <= 0 || rows <= 0 {
 		return
 	}
-	p.mu.RLock()
+	p.mu.Lock()
+	p.viewportCols = cols
+	p.viewportRows = rows
 	f := p.ptyFile
 	term := p.term
-	p.mu.RUnlock()
-	if f == nil || term == nil {
-		return
+	p.mu.Unlock()
+
+	if f != nil && term != nil {
+		term.Resize(cols, rows)
+		pty.Setsize(f, &pty.Winsize{Rows: uint16(rows), Cols: uint16(cols)}) //nolint:errcheck
 	}
-	term.Resize(cols, rows)
-	pty.Setsize(f, &pty.Winsize{Rows: uint16(rows), Cols: uint16(cols)}) //nolint:errcheck
 }
 
 // NewProcess creates a new Process instance
@@ -230,13 +239,8 @@ func (p *Process) Start() error {
 		return err
 	}
 
-	// Set PTY size
-	if p.Config.Tui {
-		tuiCols, tuiRows := p.tuiSize()
-		pty.Setsize(ptmx, &pty.Winsize{Rows: uint16(tuiRows), Cols: uint16(tuiCols)})
-	} else {
-		pty.Setsize(ptmx, &pty.Winsize{Rows: 24, Cols: 120})
-	}
+	// Set initial PTY size; will be resized to viewport dimensions if/when TUI mode activates.
+	pty.Setsize(ptmx, &pty.Winsize{Rows: 24, Cols: 120})
 
 	p.cmd = cmd
 	p.ptyFile = ptmx
@@ -244,12 +248,8 @@ func (p *Process) Start() error {
 	p.startTime = time.Now()
 	p.mu.Unlock()
 
-	// Stream PTY output (combined stdout/stderr)
-	if p.Config.Tui {
-		go p.streamTuiOutput(ptmx)
-	} else {
-		go p.streamPtyOutput(ptmx)
-	}
+	// Stream PTY output with automatic alt-screen TUI detection.
+	go p.streamAutoOutput(ptmx)
 
 	// Wait for process to exit
 	go p.wait()
@@ -291,72 +291,163 @@ func (p *Process) streamPtyOutput(ptmx *os.File) {
 	}
 }
 
-// tuiSize returns the virtual terminal dimensions for a TUI process.
-// Defaults to 200x50 if not configured.
+// tuiSize returns the viewport dimensions last reported by the UI, falling back
+// to any explicit config overrides, then a sensible default.
 func (p *Process) tuiSize() (cols, rows int) {
-	cols = p.Config.TuiCols
+	p.mu.RLock()
+	cols = p.viewportCols
+	rows = p.viewportRows
+	p.mu.RUnlock()
+
 	if cols <= 0 {
-		cols = 200
+		cols = p.Config.TuiCols
+		if cols <= 0 {
+			cols = 120
+		}
 	}
-	rows = p.Config.TuiRows
 	if rows <= 0 {
-		rows = 50
+		rows = p.Config.TuiRows
+		if rows <= 0 {
+			rows = 40
+		}
 	}
 	return cols, rows
 }
 
-// streamTuiOutput runs a virtual terminal emulator for TUI processes.
-// Instead of reading line-by-line, it feeds raw PTY bytes into a VTE,
-// takes periodic screen snapshots, and writes them to the log buffer.
-func (p *Process) streamTuiOutput(ptmx *os.File) {
-	initialCols, initialRows := p.tuiSize()
-	term := vt10x.New(vt10x.WithSize(initialCols, initialRows))
+// streamAutoOutput reads raw PTY bytes and auto-detects when a process enters
+// the alternate screen buffer (\x1b[?1049h). In normal mode it processes
+// output line-by-line with ANSI stripping. In TUI mode it runs a vt10x virtual
+// terminal and writes periodic screen snapshots to the log buffer.
+// It reverts to normal mode when the process exits the alternate screen (\x1b[?1049l).
+func (p *Process) streamAutoOutput(ptmx *os.File) {
+	var (
+		isTui    bool
+		term     vt10x.Terminal
+		tuiDone  chan struct{}
+		lineFrag []byte // partial line carry-over between reads
+	)
 
-	p.mu.Lock()
-	p.term = term
-	p.mu.Unlock()
+	startTUI := func(initialData []byte) {
+		cols, rows := p.tuiSize()
+		term = vt10x.New(vt10x.WithSize(cols, rows))
 
-	var prevLines []string
-	done := make(chan struct{})
-	ticker := time.NewTicker(150 * time.Millisecond)
+		p.mu.Lock()
+		p.term = term
+		if p.ptyFile != nil {
+			pty.Setsize(p.ptyFile, &pty.Winsize{Rows: uint16(rows), Cols: uint16(cols)}) //nolint:errcheck
+		}
+		p.mu.Unlock()
 
-	go func() {
-		defer func() {
-			ticker.Stop()
-			p.mu.Lock()
-			p.term = nil
-			p.mu.Unlock()
-		}()
-		for {
-			select {
-			case <-done:
-				return
-			case <-ticker.C:
-				term.Lock()
-				lines := snapshotTuiScreen(term)
-				term.Unlock()
+		isTui = true
+		lineFrag = nil
 
-				if tuiLinesEqual(lines, prevLines) {
-					continue
+		if len(initialData) > 0 {
+			term.Write(initialData) //nolint:errcheck
+		}
+
+		var prevLines []string
+		tuiDone = make(chan struct{})
+		ticker := time.NewTicker(150 * time.Millisecond)
+
+		go func() {
+			defer func() {
+				ticker.Stop()
+				p.mu.Lock()
+				if p.term == term {
+					p.term = nil
 				}
-				prevLines = lines
+				p.mu.Unlock()
+			}()
+			for {
+				select {
+				case <-tuiDone:
+					return
+				case <-ticker.C:
+					term.Lock()
+					lines := snapshotTuiScreen(term)
+					term.Unlock()
+					if tuiLinesEqual(lines, prevLines) {
+						continue
+					}
+					prevLines = lines
+					p.Buffer.Clear()
+					for _, line := range lines {
+						p.Buffer.Write(p.Name, "tui", line)
+					}
+				}
+			}
+		}()
+	}
 
-				p.Buffer.Clear()
-				for _, line := range lines {
-					p.Buffer.Write(p.Name, "tui", line)
+	stopTUI := func() {
+		if tuiDone != nil {
+			close(tuiDone)
+			tuiDone = nil
+		}
+		isTui = false
+		term = nil
+		p.mu.Lock()
+		p.term = nil
+		if p.ptyFile != nil {
+			pty.Setsize(p.ptyFile, &pty.Winsize{Rows: 24, Cols: 120}) //nolint:errcheck
+		}
+		p.mu.Unlock()
+		p.Buffer.Clear()
+	}
+
+	flushLine := func(b []byte) {
+		line := strings.TrimRight(string(b), "\r")
+		parts := lineRewindRegex.Split(line, -1)
+		line = parts[len(parts)-1]
+		line = ansiCursorControlRegex.ReplaceAllString(line, "")
+		p.Buffer.Write(p.Name, "stdout", line)
+	}
+
+	processNormal := func(data []byte) {
+		combined := append(lineFrag, data...)
+		lineFrag = nil
+		for len(combined) > 0 {
+			idx := bytes.IndexByte(combined, '\n')
+			if idx < 0 {
+				lineFrag = append([]byte(nil), combined...)
+				return
+			}
+			flushLine(combined[:idx])
+			combined = combined[idx+1:]
+		}
+	}
+
+	altEnter := []byte("\x1b[?1049h")
+	altExit := []byte("\x1b[?1049l")
+
+	rawBuf := make([]byte, 32*1024)
+	for {
+		n, err := ptmx.Read(rawBuf)
+		if n > 0 {
+			chunk := rawBuf[:n]
+			if isTui {
+				if idx := bytes.Index(chunk, altExit); idx >= 0 {
+					term.Write(chunk[:idx+len(altExit)]) //nolint:errcheck
+					stopTUI()
+					if rest := chunk[idx+len(altExit):]; len(rest) > 0 {
+						processNormal(rest)
+					}
+				} else {
+					term.Write(chunk) //nolint:errcheck
+				}
+			} else {
+				if idx := bytes.Index(chunk, altEnter); idx >= 0 {
+					processNormal(chunk[:idx])
+					startTUI(chunk[idx:])
+				} else {
+					processNormal(chunk)
 				}
 			}
 		}
-	}()
-
-	buf := make([]byte, 32*1024)
-	for {
-		n, err := ptmx.Read(buf)
-		if n > 0 {
-			term.Write(buf[:n]) //nolint:errcheck
-		}
 		if err != nil {
-			close(done)
+			if isTui && tuiDone != nil {
+				close(tuiDone)
+			}
 			return
 		}
 	}

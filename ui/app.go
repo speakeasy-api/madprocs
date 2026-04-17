@@ -224,11 +224,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.updateViewportSize()
-		// Resize TUI processes to match the log viewport
+		// Tell all processes the current viewport size. For processes already in
+		// TUI mode this resizes immediately; for others it stores the size so
+		// they can use it when they auto-detect alt-screen entry.
 		for _, proc := range m.manager.List() {
-			if proc.IsTui() {
-				proc.ResizeTui(m.viewport.Width, m.viewport.Height)
-			}
+			proc.ResizeTui(m.viewport.Width, m.viewport.Height)
 		}
 		// Subscribe on first window size message (initial setup)
 		if !m.ready {
@@ -305,7 +305,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// keys to the PTY. Tab or Esc returns focus to the process list.
 		if m.focus == FocusLogs {
 			procs := m.manager.List()
-			if m.selected < len(procs) && procs[m.selected].IsTui() {
+			if m.selected < len(procs) && procs[m.selected].IsInTuiMode() {
 				if key.Matches(msg, keys.Tab) {
 					m.focus = FocusList
 				} else if data := keyMsgToBytes(msg); len(data) > 0 {
@@ -938,7 +938,7 @@ func (m Model) renderStatusBar() string {
 
 	// Show TUI passthrough hint when log pane focused on a TUI process
 	procs := m.manager.List()
-	inTuiPassthrough := m.focus == FocusLogs && m.selected < len(procs) && procs[m.selected].IsTui()
+	inTuiPassthrough := m.focus == FocusLogs && m.selected < len(procs) && procs[m.selected].IsInTuiMode()
 
 	var help []string
 	if inTuiPassthrough {
