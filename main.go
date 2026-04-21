@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -119,6 +121,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Try to reuse the previous web port so existing WebUI tabs reconnect
+	if cfg.WebPort == 0 {
+		if data, err := os.ReadFile(".madprocs.port"); err == nil {
+			if u, err := url.Parse(strings.TrimSpace(string(data))); err == nil {
+				if p := u.Port(); p != "" {
+					if port, err := strconv.Atoi(p); err == nil {
+						cfg.WebPort = port
+					}
+				}
+			}
+		}
+	}
+
 	// Start web server
 	webCfg := web.Config{
 		Host:         cfg.WebHost,
@@ -126,6 +141,7 @@ func main() {
 		TLSCert:      cfg.TLSCert,
 		TLSKey:       cfg.TLSKey,
 		AllowedHosts: cfg.AllowedHosts,
+		Version:      version,
 	}
 	webServer := web.NewServer(manager, webCfg)
 	if err := webServer.Start(); err != nil {
@@ -167,7 +183,7 @@ func main() {
 		select {}
 	} else {
 		// TUI mode
-		model := ui.NewModel(manager, actualPort, webServer.Host(), webServer.IsTLS())
+		model := ui.NewModel(manager, actualPort, webServer.Host(), webServer.IsTLS(), version)
 		p := tea.NewProgram(model,
 			tea.WithAltScreen(),
 			tea.WithMouseCellMotion(),

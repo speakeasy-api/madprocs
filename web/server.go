@@ -26,6 +26,7 @@ type Config struct {
 	TLSCert      string
 	TLSKey       string
 	AllowedHosts []string
+	Version      string
 }
 
 // Server is the embedded web server
@@ -55,6 +56,7 @@ func (s *Server) Start() error {
 	// API routes with explicit HTTP methods (Go 1.22+)
 	mux.HandleFunc("GET /api/processes", s.handleProcesses)
 	mux.HandleFunc("GET /api/logs/{name}", s.handleLogs)
+	mux.HandleFunc("GET /api/version", s.handleVersion)
 	mux.HandleFunc("POST /api/process/{name}/{action}", s.handleProcessAction)
 	mux.Handle("GET /ws/logs/{process}", http.HandlerFunc(s.handleWebSocket))
 
@@ -79,6 +81,10 @@ func (s *Server) Start() error {
 
 	// Get a listener on the specified host:port (port 0 = random available port)
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, s.config.Port))
+	if err != nil && s.config.Port != 0 {
+		// Port might be in use (e.g., previous port from .madprocs.port), fall back to random
+		listener, err = net.Listen("tcp", fmt.Sprintf("%s:0", host))
+	}
 	if err != nil {
 		return err
 	}

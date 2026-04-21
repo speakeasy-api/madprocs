@@ -24,6 +24,12 @@ type LogMessage struct {
 	Process   string `json:"process"`
 }
 
+// handleVersion returns the madprocs version
+func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"version": s.config.Version})
+}
+
 // handleProcesses returns a list of all processes
 func (s *Server) handleProcesses(w http.ResponseWriter, r *http.Request) {
 	procs := s.manager.List()

@@ -34,6 +34,15 @@ const toast = document.getElementById('toast');
 async function init() {
     const processes = await fetchProcesses();
 
+    // Fetch version
+    try {
+        const resp = await fetch('/api/version');
+        const data = await resp.json();
+        if (data.version) {
+            document.querySelector('.version').textContent = data.version;
+        }
+    } catch (e) {}
+
     // Connect once to receive all logs - filtering happens client-side
     connectWebSocket();
     setupEventListeners();
@@ -150,8 +159,17 @@ function connectWebSocket() {
     ws.onopen = () => {
         connectionStatus.textContent = 'Connected';
         connectionStatus.className = 'status connected';
-        intentionalClose = false;
         reconnectDelay = 1000; // Reset backoff on successful connection
+
+        // Re-fetch all data on reconnection (handles server restart)
+        fetchProcesses();
+        if (selectedProcess) {
+            fetch(`/api/logs/${selectedProcess}`)
+                .then(r => r.json())
+                .then(data => { logs = data; renderLogs(); })
+                .catch(() => {});
+        }
+        intentionalClose = false;
     };
 
     ws.onclose = () => {
@@ -161,7 +179,7 @@ function connectWebSocket() {
         // Only reconnect if this wasn't an intentional close, with exponential backoff
         if (!intentionalClose) {
             reconnectTimeout = setTimeout(connectWebSocket, reconnectDelay);
-            reconnectDelay = Math.min(reconnectDelay * 2, 30000); // Cap at 30s
+            reconnectDelay = Math.min(reconnectDelay * 2, 10000); // Cap at 10s
         }
         intentionalClose = false;
     };

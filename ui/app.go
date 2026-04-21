@@ -58,6 +58,7 @@ type Match struct {
 // Model is the main Bubbletea model
 type Model struct {
 	manager        *process.Manager
+	version        string
 	webPort        int
 	webHost        string
 	webTLS         bool
@@ -72,6 +73,7 @@ type Model struct {
 	matches        []Match
 	matchIndex     int
 	zoomed         bool
+	mouseEnabled   bool
 	logLines       []string
 	lineToViewport map[int]int // maps original line index to viewport line
 	logSub         chan log.Line
@@ -79,18 +81,20 @@ type Model struct {
 }
 
 // NewModel creates a new UI model
-func NewModel(manager *process.Manager, webPort int, webHost string, webTLS bool) Model {
+func NewModel(manager *process.Manager, webPort int, webHost string, webTLS bool, version string) Model {
 	vp := viewport.New(0, 0)
 	vp.MouseWheelEnabled = true
 	vp.MouseWheelDelta = 3
 
 	return Model{
-		manager:  manager,
-		webPort:  webPort,
-		webHost:  webHost,
-		webTLS:   webTLS,
-		viewport: vp,
-		logLines: []string{},
+		manager:      manager,
+		version:      version,
+		webPort:      webPort,
+		webHost:      webHost,
+		webTLS:       webTLS,
+		mouseEnabled: true,
+		viewport:     vp,
+		logLines:     []string{},
 	}
 }
 
@@ -110,6 +114,7 @@ type keyMap struct {
 	Tab         key.Binding
 	Clear       key.Binding
 	Zoom        key.Binding
+	Mouse       key.Binding
 	Web         key.Binding
 	Quit        key.Binding
 	Enter       key.Binding
@@ -171,6 +176,10 @@ var keys = keyMap{
 	Zoom: key.NewBinding(
 		key.WithKeys("t"),
 		key.WithHelp("t", "toggle sidebar"),
+	),
+	Mouse: key.NewBinding(
+		key.WithKeys("m"),
+		key.WithHelp("m", "toggle mouse"),
 	),
 	Web: key.NewBinding(
 		key.WithKeys("w"),
@@ -383,6 +392,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, keys.Zoom):
 			m.zoomed = !m.zoomed
 			m.updateViewportSize()
+
+		case key.Matches(msg, keys.Mouse):
+			m.mouseEnabled = !m.mouseEnabled
+			if m.mouseEnabled {
+				cmds = append(cmds, tea.EnableMouseCellMotion)
+			} else {
+				cmds = append(cmds, tea.DisableMouse)
+			}
 
 		case key.Matches(msg, keys.Web):
 			m.openWebUI()
@@ -939,7 +956,7 @@ func (m Model) renderStatusBar() string {
 	running := m.manager.RunningCount()
 	total := m.manager.Count()
 
-	left := fmt.Sprintf(" %d/%d running", running, total)
+	left := fmt.Sprintf(" madprocs %s | %d/%d running", m.version, running, total)
 
 	// Show TUI passthrough hint when log pane focused on a TUI process
 	procs := m.manager.List()
@@ -951,6 +968,10 @@ func (m Model) renderStatusBar() string {
 			statusKeyStyle.Render("shift+tab") + ":exit tui mode",
 		}
 	} else {
+		mouseHint := statusKeyStyle.Render("m") + ":text select"
+		if !m.mouseEnabled {
+			mouseHint = statusKeyStyle.Render("m") + ":mouse scroll"
+		}
 		help = []string{
 			statusKeyStyle.Render("q") + ":quit",
 			statusKeyStyle.Render("s") + ":start",
@@ -960,8 +981,8 @@ func (m Model) renderStatusBar() string {
 			statusKeyStyle.Render("/") + ":search",
 			statusKeyStyle.Render("?") + ":regex",
 			statusKeyStyle.Render("t") + ":sidebar",
-			statusKeyStyle.Render("w") + ":open web ui",
-			statusKeyStyle.Render("⇧") + ":select",
+			statusKeyStyle.Render("w") + ":web ui",
+			mouseHint,
 		}
 	}
 	right := strings.Join(help, " ")
