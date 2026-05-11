@@ -57,6 +57,7 @@ madprocs uses the same config format as mprocs. Create an `mprocs.yaml`:
 ```yaml
 procs:
   server:
+    description: API server
     cmd: ["npm", "run", "dev"]
     cwd: ./server
 
@@ -105,6 +106,35 @@ Press `w` to open the web UI in your browser, or access it at the URL shown in t
 - Search and filtering
 - Process control (start/stop/restart)
 - Log download
+
+## MCP Server
+
+madprocs exposes an MCP server on the same host and port as the web dashboard at `/mcp`.
+
+Set a stable web port in `mprocs.yaml` if you want MCP clients to use a fixed URL:
+
+```yaml
+web_port: 8080
+
+procs:
+  server:
+    description: API server
+    cmd: ["npm", "run", "dev"]
+```
+
+With that config, the MCP endpoint is:
+
+```text
+http://localhost:8080/mcp
+```
+
+The MCP server advertises the configured processes in its instructions using only the process name plus relevant `cmd`, `cwd`, and `description` config. It provides these tools:
+
+| Tool | Arguments | Result |
+|------|-----------|--------|
+| `ListProcesses` | none | Configured process names |
+| `ReadProcessLogs` | `name`, `type` (`head` or `tail`), `line_count` | Selected log lines with timestamp, stream, and content |
+| `RestartProcess` | `name` | Restarts the named process |
 
 ## Claude Code Integration
 

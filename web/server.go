@@ -36,6 +36,7 @@ type Server struct {
 	port    int
 	server  *http.Server
 	hub     *Hub
+	mcp     http.Handler
 }
 
 // NewServer creates a new web server
@@ -46,6 +47,7 @@ func NewServer(manager *process.Manager, cfg Config) *Server {
 		port:    cfg.Port,
 		hub:     NewHub(),
 	}
+	s.mcp = newMCPHandler(manager, cfg.Version)
 	return s
 }
 
@@ -59,6 +61,9 @@ func (s *Server) Start() error {
 	mux.HandleFunc("GET /api/version", s.handleVersion)
 	mux.HandleFunc("POST /api/process/{name}/{action}", s.handleProcessAction)
 	mux.Handle("GET /ws/logs/{process}", http.HandlerFunc(s.handleWebSocket))
+	mux.Handle("GET /mcp", s.mcp)
+	mux.Handle("POST /mcp", s.mcp)
+	mux.Handle("DELETE /mcp", s.mcp)
 
 	// Static files
 	staticFS, err := fs.Sub(staticFiles, "static")
