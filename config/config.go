@@ -31,6 +31,7 @@ type StopConfig struct {
 
 // ProcConfig represents a single process configuration
 type ProcConfig struct {
+	Description string             `yaml:"description"`
 	Shell       string             `yaml:"shell"`
 	Cmd         StringOrSlice      `yaml:"cmd"`
 	Cwd         string             `yaml:"cwd"`
